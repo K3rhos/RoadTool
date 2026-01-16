@@ -1,8 +1,8 @@
 # 🌍Overview
 
-This tool is a work in progress procedural road system designed to eliminate the need for manual 3D road modeling or mapping.
+This tool is a work in progress procedural road system designed to avoid the need for manual 3D road modeling/mapping.
 
-The road layout is controlled by an editable spline, allowing you to easily adjust curves, direction, and flow to fit your environment. No premade road models are required, the length, width, and overall shape of the road are automatically generated using customizable parameters.
+The road layout is controlled by an editable spline, allowing you to easily adjust curves position and direction to fit your environment. No premade road model is required, the shape of the road is automatically generated using customizable parameters. (Width, Material, ...)
 
 This system also procedurally handles sidewalks, decals, and streetlights placement, removing the need to manually place props along the road. All elements adapt dynamically based on the road’s configuration.
 
