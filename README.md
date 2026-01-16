@@ -10,6 +10,8 @@ This system also procedurally handles sidewalks, decals, and streetlights placem
 
 <img width="2507" height="1282" alt="Overview" src="https://github.com/user-attachments/assets/d4dfa537-9985-4e69-8334-045d6a752c5a" />
 
+https://github.com/user-attachments/assets/5bdcd072-2cb1-48eb-b8d4-83d65eb1ebce
+
 # 🔧Features
 
 - General features & Optimization
