@@ -212,9 +212,9 @@ public partial class RoadComponent
 
 		return important;
 	}
-
-
-
+	
+	
+	
 	private static float CalculateAngleBetweenSegments(Transform _Previous, Transform _Current, Transform _Next)
 	{
 		Vector3 dir1 = (_Current.Position - _Previous.Position).Normal;

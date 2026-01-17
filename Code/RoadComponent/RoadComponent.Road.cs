@@ -7,7 +7,7 @@ namespace RedSnail.RoadTool;
 public partial class RoadComponent
 {
 	[Property(Title = "Material"), Feature("Road", Icon = "fork_left", Tint = EditorTint.Green)] private Material RoadMaterial { get; set { field = value; IsDirty = true; } }
-	[Property(Title = "Width"), Feature("Road"), Range(10.0f, 1000.0f)] private float RoadWidth { get; set { field = value; IsDirty = true; } } = 500.0f;
+	[Property(Title = "Width"), Feature("Road"), Range(10.0f, 1000.0f)] public float RoadWidth { get; set { field = value; IsDirty = true; } } = 500.0f;
 	[Property(Title = "Precision"), Feature("Road"), Range(10.0f, 100.0f)] private float RoadPrecision { get; set { field = value.Clamp(1.0f, 10000.0f); IsDirty = true; } } = 40.0f;
 	[Property(Title = "Texture Repeat"), Feature("Road")] private float RoadTextureInchesPerRepeat { get; set { field = value.Clamp(1.0f, 100000.0f); IsDirty = true; } } = 500.0f;
 

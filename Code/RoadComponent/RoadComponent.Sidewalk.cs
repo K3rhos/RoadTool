@@ -11,9 +11,9 @@ public partial class RoadComponent
 	[Property(Title = "Width"), Feature("Sidewalk"), Range(10.0f, 500.0f)] private float SidewalkWidth { get; set { field = value; IsDirty = true; } } = 150.0f;
 	[Property(Title = "Height"), Feature("Sidewalk"), Range(0.1f, 100.0f)] private float SidewalkHeight { get; set { field = value; IsDirty = true; } } = 5.0f;
 	[Property(Title = "Texture Repeat"), Feature("Sidewalk")] private float SidewalkTextureRepeat { get; set { field = value.Clamp(1.0f, 100000.0f); IsDirty = true; } } = 200.0f;
-
-
-
+	
+	
+	
 	private void BuildSidewalk()
 	{
 		if (!HasSidewalk)
@@ -68,7 +68,7 @@ public partial class RoadComponent
 
 		float leftAvgUVDist = 0f;
 		float rightAvgUVDist = 0f;
-
+		
 		for (int i = 0; i < finalSegmentCount; i++)
 		{
 			int idx0 = segmentsToKeep[i];
@@ -120,7 +120,7 @@ public partial class RoadComponent
 
 			Vector3 rto0 = ro0 + up0 * SidewalkHeight;
 			Vector3 rto1 = ro1 + up1 * SidewalkHeight;
-
+			
 			// Calculate distances
 			float leftInnerLen3D = Vector3.DistanceBetween(lb0, lb1);
 			float leftOuterLen3D = Vector3.DistanceBetween(lo0, lo1);
