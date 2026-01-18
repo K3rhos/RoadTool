@@ -16,9 +16,9 @@ public class IntersectionTool : EditorTool
 	public override Widget CreateToolSidebar()
 	{
 		var sidebar = new ToolSidebarWidget();
-		
+
 		sidebar.MaximumSize = Vector2.One * 120.0f;
-		
+
 		var group = sidebar.AddGroup("Create");
 
 		sidebar.CreateButton("Create Road", "route", null, CreateRoad, true, group);
@@ -31,20 +31,20 @@ public class IntersectionTool : EditorTool
 
 	public override void OnEnabled()
 	{
-		
+
 	}
-	
-	
-	
+
+
+
 	private static void CreateRoad()
 	{
 		GameObject go = SceneEditorSession.Active.Scene.CreateObject();
 		go.Name = "Road";
 		go.AddComponent<RoadComponent>();
 	}
-	
-	
-	
+
+
+
 	private static void CreateIntersection()
 	{
 		GameObject go = SceneEditorSession.Active.Scene.CreateObject();

@@ -15,13 +15,13 @@ public partial class RoadIntersectionComponent
 	[Property, ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private float Radius { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 600.0f;
 	[Property, ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private float Precision { get; set { field = value.Clamp(10.0f, 10000.0f); m_MeshBuilder?.IsDirty = true; } } = 40.0f;
 	[Property(Title = "Exits"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private List<CircleExit> CircleExits { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = new();
-	
-	
-	
+
+
+
 	private int GetCircleSegmentCount()
 	{
 		float circumference = 2.0f * MathF.PI * Radius;
-		
+
 		// Ensure at least 8 segments so it doesn't turn into a square/triangle
 		return Math.Max(8, (int)Math.Ceiling(circumference / Precision));
 	}
@@ -47,7 +47,7 @@ public partial class RoadIntersectionComponent
 		{
 			float a0 = i * step;
 			float a1 = (i + 1) * step;
-			
+
 			if (ArcBlockedByExit(a0, a1))
 				continue;
 
@@ -58,9 +58,9 @@ public partial class RoadIntersectionComponent
 				up, d0, Vector2.Zero, new Vector2(0, 1), new Vector2(1, 1));
 		}
 	}
-	
-	
-	
+
+
+
 	private void BuildCircleSidewalk()
 	{
 		Vector3 up = WorldRotation.Up;
@@ -139,21 +139,21 @@ public partial class RoadIntersectionComponent
 			);
 		}
 	}
-	
-	
-	
+
+
+
 	private static float AngleDelta(float _A, float _B)
 	{
 		float d = (_A - _B) % 360.0f;
-		
+
 		if (d > 180.0f) d -= 360.0f;
 		if (d < -180.0f) d += 360.0f;
-		
+
 		return MathF.Abs(d);
 	}
-	
-	
-	
+
+
+
 	private bool ArcBlockedByExit(float _A0, float _A1)
 	{
 		foreach (var exit in CircleExits)
@@ -168,13 +168,13 @@ public partial class RoadIntersectionComponent
 
 		return false;
 	}
-	
-	
-	
+
+
+
 	public Transform GetCircleExitTransform(int _Index)
 	{
 		var exit = CircleExits[_Index];
-		
+
 		Vector3 dir = Rotation.FromYaw(exit.AngleDegrees).Forward;
 
 		float dist = Shape == IntersectionShape.Circle ? Radius : Math.Max(Width, Length) * 0.5f;

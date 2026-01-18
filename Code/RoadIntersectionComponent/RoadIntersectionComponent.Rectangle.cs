@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using Sandbox;
 
 namespace RedSnail.RoadTool;
@@ -8,33 +9,46 @@ public enum RectangleExit
 {
 	None = 0,
 	North = 1 << 0, // +Forward
-	East  = 1 << 1, // +Right
+	East = 1 << 1, // +Right
 	South = 1 << 2, // -Forward
-	West  = 1 << 3  // -Right
+	West = 1 << 3  // -Right
 }
 
 public partial class RoadIntersectionComponent
 {
+	private static readonly float QuarterTurnRad = MathF.PI * 0.5f;
+
 	[Property, ShowIf(nameof(Shape), IntersectionShape.Rectangle)] private float Width { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 500.0f;
 	[Property, ShowIf(nameof(Shape), IntersectionShape.Rectangle)] private float Length { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 500.0f;
-	[Property(Title = "Exits"), ShowIf(nameof(Shape), IntersectionShape.Rectangle)] private RectangleExit RectangleExits { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = RectangleExit.None;
-	
-	
-	
+	[Property, ShowIf(nameof(Shape), IntersectionShape.Rectangle), Range(0, 16), Step(2)] private int CornerSegments { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 8;
+	[Property(Title = "Exits"), ShowIf(nameof(Shape), IntersectionShape.Rectangle)] private RectangleExit RectangleExits { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = (RectangleExit)15;
+
+
+
 	private void BuildRectangleRoad()
 	{
-		int exitCount = 0;
-		
-		if (RectangleExits.HasFlag(RectangleExit.North)) exitCount++;
-		if (RectangleExits.HasFlag(RectangleExit.East)) exitCount++;
-		if (RectangleExits.HasFlag(RectangleExit.South)) exitCount++;
-		if (RectangleExits.HasFlag(RectangleExit.West)) exitCount++;
+		bool n = RectangleExits.HasFlag(RectangleExit.North);
+		bool s = RectangleExits.HasFlag(RectangleExit.South);
+		bool e = RectangleExits.HasFlag(RectangleExit.East);
+		bool w = RectangleExits.HasFlag(RectangleExit.West);
+
+		int exitCount = BitOperations.PopCount((uint)RectangleExits);
+
+		int cornerQuads = 0;
+
+		if (CornerSegments > 0)
+		{
+			if (n && e) cornerQuads += CornerSegments;
+			if (n && w) cornerQuads += CornerSegments;
+			if (s && e) cornerQuads += CornerSegments;
+			if (s && w) cornerQuads += CornerSegments;
+		}
 
 		m_MeshBuilder.InitSubmesh
 		(
 			"intersection_road",
-			(1 + exitCount) * 4,
-			(1 + exitCount) * 6,
+			(1 + exitCount + cornerQuads) * 4,
+			(1 + exitCount + cornerQuads) * 6,
 			RoadMaterial ?? Material.Load("materials/dev/reflectivity_30.vmat"),
 			_HasCollision: true
 		);
@@ -45,45 +59,53 @@ public partial class RoadIntersectionComponent
 
 		float hw = Width * 0.5f;
 		float hl = Length * 0.5f;
-		
-		Vector3 pSW = -right * hw - forward * hl; // South West
-		Vector3 pNW = -right * hw + forward * hl; // North West
-		Vector3 pNE =  right * hw + forward * hl; // North East
-		Vector3 pSE =  right * hw - forward * hl; // South East
+
+		Vector3 pSW = -right * hw - forward * hl;
+		Vector3 pNW = -right * hw + forward * hl;
+		Vector3 pNE = right * hw + forward * hl;
+		Vector3 pSE = right * hw - forward * hl;
 
 		// Main center quad
 		float roadU = Width / RoadTextureRepeat;
 		float roadV = Length / RoadTextureRepeat;
 
-		m_MeshBuilder.AddQuad("intersection_road", pSE, pNE, pNW, pSW, up, forward,
-			new Vector2(0, 0), new Vector2(0, roadV), new Vector2(roadU, roadV), new Vector2(roadU, 0));
+		m_MeshBuilder.AddQuad
+		(
+			"intersection_road",
+			pSE, pNE, pNW, pSW,
+			up,
+			forward,
+			new Vector2(0, 0), new Vector2(0, roadV), new Vector2(roadU, roadV), new Vector2(roadU, 0)
+		);
 
 		// Road extensions for exits
-		if (RectangleExits.HasFlag(RectangleExit.North))
-			AddRoadExtension(pNW, pNE, forward);
-    
-		if (RectangleExits.HasFlag(RectangleExit.South))
-			AddRoadExtension(pSE, pSW, -forward);
+		if (n) AddRoadExtension(pNW, pNE, forward);
+		if (s) AddRoadExtension(pSE, pSW, -forward);
+		if (e) AddRoadExtension(pNE, pSE, right);
+		if (w) AddRoadExtension(pSW, pNW, -right);
 
-		if (RectangleExits.HasFlag(RectangleExit.East))
-			AddRoadExtension(pNE, pSE, right);
-
-		if (RectangleExits.HasFlag(RectangleExit.West))
-			AddRoadExtension(pSW, pNW, -right);
+		// Corner road fillers
+		if (CornerSegments > 0)
+		{
+			if (n && e) AddRoadCornerFiller(pNE, right, forward);
+			if (n && w) AddRoadCornerFiller(pNW, -right, forward);
+			if (s && e) AddRoadCornerFiller(pSE, right, -forward);
+			if (s && w) AddRoadCornerFiller(pSW, -right, -forward);
+		}
 	}
-	
-	
-	
+
+
+
 	private void AddRoadExtension(Vector3 _CornerA, Vector3 _CornerB, Vector3 _Direction)
 	{
 		Vector3 up = WorldRotation.Up;
-		
+
 		Vector3 extA = _CornerA + _Direction * SidewalkWidth;
 		Vector3 extB = _CornerB + _Direction * SidewalkWidth;
-		
+
 		float extU = (_CornerB - _CornerA).Length / RoadTextureRepeat;
 		float extV = SidewalkWidth / RoadTextureRepeat;
-		
+
 		m_MeshBuilder.AddQuad
 		(
 			"intersection_road",
@@ -96,34 +118,97 @@ public partial class RoadIntersectionComponent
 
 
 
+	private void AddRoadCornerFiller(Vector3 _Corner, Vector3 _DirA, Vector3 _DirB)
+	{
+		Vector3 up = WorldRotation.Up;
+		float w = SidewalkWidth;
+
+		Vector3 arcCenter = _Corner + _DirA * w + _DirB * w;
+
+		Vector3 cross = Vector3.Cross(_DirA, _DirB);
+		bool flip = Vector3.Dot(cross, up) >= 0;
+
+		Vector3 tangent = WorldRotation.Forward;
+
+		for (int i = 0; i < CornerSegments; i++)
+		{
+			float t0 = (float)i / CornerSegments;
+			float t1 = (float)(i + 1) / CornerSegments;
+
+			float angle0 = t0 * QuarterTurnRad;
+			float angle1 = t1 * QuarterTurnRad;
+
+			Vector3 roadEdge0 = arcCenter - _DirB * w * MathF.Cos(angle0) - _DirA * w * MathF.Sin(angle0);
+			Vector3 roadEdge1 = arcCenter - _DirB * w * MathF.Cos(angle1) - _DirA * w * MathF.Sin(angle1);
+
+			Vector3 localCenter = WorldRotation.Inverse * (_Corner - WorldPosition);
+			Vector3 localEdge0 = WorldRotation.Inverse * (roadEdge0 - WorldPosition);
+			Vector3 localEdge1 = WorldRotation.Inverse * (roadEdge1 - WorldPosition);
+
+			Vector2 uvCenter = new Vector2(localCenter.x, localCenter.y) / RoadTextureRepeat;
+			Vector2 uvEdge0 = new Vector2(localEdge0.x, localEdge0.y) / RoadTextureRepeat;
+			Vector2 uvEdge1 = new Vector2(localEdge1.x, localEdge1.y) / RoadTextureRepeat;
+
+			if (flip)
+			{
+				m_MeshBuilder.AddTriangle
+				(
+					"intersection_road",
+					_Corner, roadEdge0, roadEdge1,
+					up, tangent,
+					uvCenter, uvEdge0, uvEdge1
+				);
+			}
+			else
+			{
+				m_MeshBuilder.AddTriangle
+				(
+					"intersection_road",
+					_Corner, roadEdge1, roadEdge0,
+					up, tangent,
+					uvCenter, uvEdge1, uvEdge0
+				);
+			}
+		}
+	}
+
+
+
 	private void BuildRectangleSidewalk()
 	{
-		// Calculate how many sides are NOT exits
-		int sideCount = 0;
-		
-		if (!RectangleExits.HasFlag(RectangleExit.North)) sideCount++;
-		if (!RectangleExits.HasFlag(RectangleExit.South)) sideCount++;
-		if (!RectangleExits.HasFlag(RectangleExit.East)) sideCount++;
-		if (!RectangleExits.HasFlag(RectangleExit.West)) sideCount++;
-		
-		int endCapCount = 0;
-		
-		// Check every corner for adjacent exits
-		if (RectangleExits.HasFlag(RectangleExit.North)) endCapCount += 2; // North exit affects NW and NE corners
-		if (RectangleExits.HasFlag(RectangleExit.South)) endCapCount += 2; // South exit affects SW and SE corners
-		if (RectangleExits.HasFlag(RectangleExit.East))  endCapCount += 2; // East exit affects NE and SE corners
-		if (RectangleExits.HasFlag(RectangleExit.West))  endCapCount += 2; // West exit affects NW and SW corners
+		bool n = RectangleExits.HasFlag(RectangleExit.North);
+		bool s = RectangleExits.HasFlag(RectangleExit.South);
+		bool e = RectangleExits.HasFlag(RectangleExit.East);
+		bool w = RectangleExits.HasFlag(RectangleExit.West);
 
-		// Each side = 3 Quads (Top, Inner, Outer) = 12 vertices, 18 indices
-		int totalVertices = (sideCount * 12) + (4 * 12) + (endCapCount * 4);
-		int totalIndices = (sideCount * 18) + (4 * 18) + (endCapCount * 6);
+		int sideCount = 4 - BitOperations.PopCount((uint)RectangleExits);
+
+		int endCapCount = 0;
+
+		if (n) endCapCount += 2;
+		if (s) endCapCount += 2;
+		if (e) endCapCount += 2;
+		if (w) endCapCount += 2;
+
+		int cornerSegments = 0;
+
+		if (CornerSegments > 0)
+		{
+			if (n && e) cornerSegments += CornerSegments;
+			if (n && w) cornerSegments += CornerSegments;
+			if (s && e) cornerSegments += CornerSegments;
+			if (s && w) cornerSegments += CornerSegments;
+		}
+
+		int totalVertices = (sideCount * 12) + (4 * 12) + (endCapCount * 4) + (cornerSegments * 12);
+		int totalIndices = (sideCount * 18) + (4 * 18) + (endCapCount * 6) + (cornerSegments * 18);
 
 		m_MeshBuilder.InitSubmesh
 		(
-			"intersection_sidewalk", 
-			totalVertices, 
-			totalIndices, 
-			SidewalkMaterial ?? Material.Load("materials/dev/reflectivity_70.vmat"), 
+			"intersection_sidewalk",
+			totalVertices,
+			totalIndices,
+			SidewalkMaterial ?? Material.Load("materials/dev/reflectivity_70.vmat"),
 			true
 		);
 
@@ -132,147 +217,254 @@ public partial class RoadIntersectionComponent
 		float hw = Width * 0.5f;
 		float hl = Length * 0.5f;
 
-		// North (+Forward)
-		if (!RectangleExits.HasFlag(RectangleExit.North))
-			AddSidewalkStrip(right * hw + forward * hl, -right * hw + forward * hl, forward);
+		Vector3 pSW = -right * hw - forward * hl;
+		Vector3 pNW = -right * hw + forward * hl;
+		Vector3 pNE = right * hw + forward * hl;
+		Vector3 pSE = right * hw - forward * hl;
 
-		// South (-Forward)
-		if (!RectangleExits.HasFlag(RectangleExit.South))
-			AddSidewalkStrip(-right * hw - forward * hl, right * hw - forward * hl, -forward);
+		// Build sidewalk strips
+		if (!n) AddSidewalkStrip(pNE, pNW, forward);
+		if (!s) AddSidewalkStrip(pSW, pSE, -forward);
+		if (!e) AddSidewalkStrip(pSE, pNE, right);
+		if (!w) AddSidewalkStrip(pNW, pSW, -right);
 
-		// East (+Right)
-		if (!RectangleExits.HasFlag(RectangleExit.East))
-			AddSidewalkStrip(right * hw - forward * hl, right * hw + forward * hl, right);
+		// Build corner caps
+		if (CornerSegments > 0)
+		{
+			if (n && e) AddRoundedSidewalkCorner(pNE, right, forward);
+			else AddCornerCap(pNE, right, forward, e, n);
 
-		// West (-Right)
-		if (!RectangleExits.HasFlag(RectangleExit.West))
-			AddSidewalkStrip(-right * hw + forward * hl, -right * hw - forward * hl, -right);
-		
-		bool n = RectangleExits.HasFlag(RectangleExit.North);
-		bool s = RectangleExits.HasFlag(RectangleExit.South);
-		bool e = RectangleExits.HasFlag(RectangleExit.East);
-		bool w = RectangleExits.HasFlag(RectangleExit.West);
-		
-		AddCornerCap(-right * hw - forward * hl, -right, -forward, w, s); // South-West
-		AddCornerCap( right * hw - forward * hl,  right, -forward, e, s); // South-East
-		AddCornerCap( right * hw + forward * hl,  right,  forward,  e, n); // North-East
-		AddCornerCap(-right * hw + forward * hl, -right,  forward,  w, n); // North-West
+			if (n && w) AddRoundedSidewalkCorner(pNW, -right, forward);
+			else AddCornerCap(pNW, -right, forward, w, n);
+
+			if (s && e) AddRoundedSidewalkCorner(pSE, right, -forward);
+			else AddCornerCap(pSE, right, -forward, e, s);
+
+			if (s && w) AddRoundedSidewalkCorner(pSW, -right, -forward);
+			else AddCornerCap(pSW, -right, -forward, w, s);
+		}
+		else
+		{
+			AddCornerCap(pNE, right, forward, e, n);
+			AddCornerCap(pNW, -right, forward, w, n);
+			AddCornerCap(pSE, right, -forward, e, s);
+			AddCornerCap(pSW, -right, -forward, w, s);
+		}
 	}
-	
-	
-	
+
+
+
+	private void AddRoundedSidewalkCorner(Vector3 _Corner, Vector3 _DirA, Vector3 _DirB)
+	{
+		Vector3 up = WorldRotation.Up;
+		float h = SidewalkHeight;
+		float w = SidewalkWidth;
+
+		Vector3 cross = Vector3.Cross(_DirA, _DirB);
+		bool flip = Vector3.Dot(cross, up) >= 0;
+
+		Vector3 arcCenter = _Corner + _DirA * w + _DirB * w;
+
+		float totalArcLength = w * QuarterTurnRad;
+		float uW = w / SidewalkTextureRepeat;
+		float hH = h / SidewalkTextureRepeat;
+
+		for (int i = 0; i < CornerSegments; i++)
+		{
+			float t0 = (float)i / CornerSegments;
+			float t1 = (float)(i + 1) / CornerSegments;
+
+			float angle0 = float.DegreesToRadians(t0 * 90.0f);
+			float angle1 = float.DegreesToRadians(t1 * 90.0f);
+
+			Vector3 inner0 = arcCenter - _DirB * w * MathF.Cos(angle0) - _DirA * w * MathF.Sin(angle0);
+			Vector3 inner1 = arcCenter - _DirB * w * MathF.Cos(angle1) - _DirA * w * MathF.Sin(angle1);
+
+			Vector3 outer0, outer1;
+
+			if (t1 <= 0.5f)
+			{
+				outer0 = _Corner + _DirA * w + _DirB * w * (t0 * 2.0f);
+				outer1 = _Corner + _DirA * w + _DirB * w * (t1 * 2.0f);
+			}
+			else if (t0 >= 0.5f)
+			{
+				outer0 = _Corner + _DirA * w * (1.0f - (t0 - 0.5f) * 2.0f) + _DirB * w;
+				outer1 = _Corner + _DirA * w * (1.0f - (t1 - 0.5f) * 2.0f) + _DirB * w;
+			}
+			else
+			{
+				outer0 = _Corner + _DirA * w + _DirB * w * (t0 * 2.0f);
+				outer1 = _Corner + _DirA * w * (1.0f - (t1 - 0.5f) * 2.0f) + _DirB * w;
+			}
+
+			Vector3 topInner0 = inner0 + up * h;
+			Vector3 topInner1 = inner1 + up * h;
+			Vector3 topOuter0 = outer0 + up * h;
+			Vector3 topOuter1 = outer1 + up * h;
+
+			Vector3 n0 = (inner0 - arcCenter).Normal;
+			Vector3 n1 = (inner1 - arcCenter).Normal;
+
+			Vector3 tangent = (inner1 - inner0).Normal;
+
+			float v0 = (t0 * totalArcLength) / SidewalkTextureRepeat;
+			float v1 = (t1 * totalArcLength) / SidewalkTextureRepeat;
+
+			Vector3 outerTangent = (outer1 - outer0).Normal;
+			Vector3 outerNormal = flip ? Vector3.Cross(outerTangent, up) : Vector3.Cross(up, outerTangent);
+
+			if (flip)
+			{
+				// Top face
+				m_MeshBuilder.AddQuad
+				(
+					"intersection_sidewalk",
+					topOuter0, topOuter1, topInner1, topInner0,
+					up,
+					(_DirA + _DirB).Normal,
+					new Vector2(uW, v0), new Vector2(uW, v1), new Vector2(0, v1), new Vector2(0, v0)
+				);
+
+				// Inner face
+				m_MeshBuilder.AddQuad
+				(
+					"intersection_sidewalk",
+					topInner0, topInner1, inner1, inner0,
+					n0, n1, n1, n0,
+					tangent,
+					new Vector2(0, v0), new Vector2(0, v1), new Vector2(hH, v1), new Vector2(hH, v0)
+				);
+
+				// Outer face
+				m_MeshBuilder.AddQuad
+				(
+					"intersection_sidewalk",
+					topOuter1, topOuter0, outer0, outer1,
+					outerNormal,
+					-outerTangent,
+					new Vector2(0, v1), new Vector2(0, v0), new Vector2(hH, v0), new Vector2(hH, v1)
+				);
+			}
+			else
+			{
+				// Top face
+				m_MeshBuilder.AddQuad
+				(
+					"intersection_sidewalk",
+					topInner0, topInner1, topOuter1, topOuter0,
+					up,
+					(_DirA + _DirB).Normal,
+					new Vector2(0, v0), new Vector2(0, v1), new Vector2(uW, v1), new Vector2(uW, v0)
+				);
+
+				// Inner face
+				m_MeshBuilder.AddQuad
+				(
+					"intersection_sidewalk",
+					topInner1, topInner0, inner0, inner1,
+					n1, n0, n0, n1,
+					-tangent,
+					new Vector2(0, v1), new Vector2(0, v0), new Vector2(hH, v0), new Vector2(hH, v1)
+				);
+
+				// Outer face
+				m_MeshBuilder.AddQuad
+				(
+					"intersection_sidewalk",
+					topOuter0, topOuter1, outer1, outer0,
+					outerNormal,
+					outerTangent,
+					new Vector2(0, v1), new Vector2(0, v0), new Vector2(hH, v0), new Vector2(hH, v1)
+				);
+			}
+		}
+	}
+
+
+
 	private void AddCornerCap(Vector3 _CornerPos, Vector3 _DirA, Vector3 _DirB, bool _SideAIsExit, bool _SideBIsExit)
 	{
-	    Vector3 up = WorldRotation.Up;
-	    float h = SidewalkHeight;
-	    float w = SidewalkWidth;
-	    
-	    Vector3 pCenter = _CornerPos;
-	    Vector3 pA = _CornerPos + _DirA * w;
-	    Vector3 pB = _CornerPos + _DirB * w;
-	    Vector3 pOuter = _CornerPos + (_DirA * w) + (_DirB * w);
-	    
-	    Vector3 tCenter = pCenter + up * h;
-	    Vector3 tA = pA + up * h;
-	    Vector3 tB = pB + up * h;
-	    Vector3 tOuter = pOuter + up * h;
-	    
-	    Vector3 cross = Vector3.Cross(_DirA, _DirB);
-	    bool flip = Vector3.Dot(cross, up) >= 0;
+		Vector3 up = WorldRotation.Up;
+		float h = SidewalkHeight;
+		float w = SidewalkWidth;
 
-	    float uW = SidewalkWidth / SidewalkTextureRepeat;
-	    float hH = SidewalkHeight / SidewalkTextureRepeat;
-	    
-	    if (flip)
-	    {
-		    // Top face
-		    m_MeshBuilder.AddQuad("intersection_sidewalk", tOuter, tB, tCenter, tA, up, _DirA, 
-			    new Vector2(uW, uW), new Vector2(0, uW), new Vector2(0, 0), new Vector2(uW, 0));
-       
-		    // Outer face A
-		    m_MeshBuilder.AddQuad("intersection_sidewalk", tA, pA, pOuter, tOuter, _DirA, _DirB,
-			    new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0), new Vector2(0, 0));
+		Vector3 pCenter = _CornerPos;
+		Vector3 pA = _CornerPos + _DirA * w;
+		Vector3 pB = _CornerPos + _DirB * w;
+		Vector3 pOuter = _CornerPos + (_DirA * w) + (_DirB * w);
 
-		    // Outer face B
-		    m_MeshBuilder.AddQuad("intersection_sidewalk", tOuter, pOuter, pB, tB, _DirB, -_DirA,
-			    new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0), new Vector2(0, 0));
-	    }
-	    else
-	    {
-		    // Top face
-		    m_MeshBuilder.AddQuad("intersection_sidewalk", tOuter, tA, tCenter, tB, up, _DirA, 
-			    new Vector2(uW, uW), new Vector2(0, uW), new Vector2(0, 0), new Vector2(uW, 0));
+		Vector3 tCenter = pCenter + up * h;
+		Vector3 tA = pA + up * h;
+		Vector3 tB = pB + up * h;
+		Vector3 tOuter = pOuter + up * h;
 
-		    // Outer face A
-		    m_MeshBuilder.AddQuad("intersection_sidewalk", tOuter, pOuter, pA, tA, _DirA, -_DirB,
-			    new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0), new Vector2(0, 0));
+		Vector3 cross = Vector3.Cross(_DirA, _DirB);
+		bool flip = Vector3.Dot(cross, up) >= 0;
 
-		    // Outer face B
-		    m_MeshBuilder.AddQuad("intersection_sidewalk", tB, pB, pOuter, tOuter, _DirB, _DirA,
-			    new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0), new Vector2(0, 0));
-	    }
-	    
-	    // Seal the "A" side if it's an exit
-	    if (_SideAIsExit)
-	    {
-		    if (flip)
-			    m_MeshBuilder.AddQuad
-			    (
-					"intersection_sidewalk",
-					tA, tCenter, pCenter, pA,
-					-_DirB,
-					-_DirA,
-					new Vector2(0, 0), new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0)
-			    );
-		    else
-			    m_MeshBuilder.AddQuad
-			    (
-				    "intersection_sidewalk",
-				    tCenter, tA, pA, pCenter,
-				    -_DirB,
-				    _DirA,
-				    new Vector2(0, 0), new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0)
-			    );
-	    }
+		float uW = SidewalkWidth / SidewalkTextureRepeat;
+		float hH = SidewalkHeight / SidewalkTextureRepeat;
 
-	    // Seal the "B" side if it's an exit
-	    if (_SideBIsExit)
-	    {
-		    if (flip)
-			    m_MeshBuilder.AddQuad
-			    (
-				    "intersection_sidewalk",
-				    tCenter, tB, pB, pCenter,
-				    -_DirA,
-				    _DirB,
-				    new Vector2(0, 0), new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0)
-			    );
-		    else
-			    m_MeshBuilder.AddQuad
-			    (
-				    "intersection_sidewalk",
-				    tB, tCenter, pCenter, pB,
-				    -_DirA,
-				    -_DirB,
-				    new Vector2(0, 0), new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0)
-			    );
-	    }
+		if (flip)
+		{
+			// Top face
+			m_MeshBuilder.AddQuad("intersection_sidewalk", tOuter, tB, tCenter, tA, up, _DirA,
+				new Vector2(uW, uW), new Vector2(0, uW), new Vector2(0, 0), new Vector2(uW, 0));
+
+			// Outer faces
+			m_MeshBuilder.AddQuad("intersection_sidewalk", tA, pA, pOuter, tOuter, _DirA, _DirB,
+				new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0), new Vector2(0, 0));
+
+			m_MeshBuilder.AddQuad("intersection_sidewalk", tOuter, pOuter, pB, tB, _DirB, -_DirA,
+				new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0), new Vector2(0, 0));
+		}
+		else
+		{
+			// Top face
+			m_MeshBuilder.AddQuad("intersection_sidewalk", tOuter, tA, tCenter, tB, up, _DirA,
+				new Vector2(uW, uW), new Vector2(0, uW), new Vector2(0, 0), new Vector2(uW, 0));
+
+			// Outer faces
+			m_MeshBuilder.AddQuad("intersection_sidewalk", tOuter, pOuter, pA, tA, _DirA, -_DirB,
+				new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0), new Vector2(0, 0));
+
+			m_MeshBuilder.AddQuad("intersection_sidewalk", tB, pB, pOuter, tOuter, _DirB, _DirA,
+				new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0), new Vector2(0, 0));
+		}
+
+		if (_SideAIsExit)
+		{
+			if (flip)
+				m_MeshBuilder.AddQuad("intersection_sidewalk", tA, tCenter, pCenter, pA, -_DirB, -_DirA,
+					new Vector2(0, 0), new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0));
+			else
+				m_MeshBuilder.AddQuad("intersection_sidewalk", tCenter, tA, pA, pCenter, -_DirB, _DirA,
+					new Vector2(0, 0), new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0));
+		}
+
+		if (_SideBIsExit)
+		{
+			if (flip)
+				m_MeshBuilder.AddQuad("intersection_sidewalk", tCenter, tB, pB, pCenter, -_DirA, _DirB,
+					new Vector2(0, 0), new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0));
+			else
+				m_MeshBuilder.AddQuad("intersection_sidewalk", tB, tCenter, pCenter, pB, -_DirA, -_DirB,
+					new Vector2(0, 0), new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0));
+		}
 	}
-	
-	
-	
+
+
+
 	private void AddSidewalkStrip(Vector3 _Start, Vector3 _End, Vector3 _Outward)
 	{
 		Vector3 up = WorldRotation.Up;
 		Vector3 forward = (_End - _Start).Normal;
 
-		// Bottom points
 		Vector3 s0 = _Start;
 		Vector3 s1 = _End;
 		Vector3 o0 = s0 + _Outward * SidewalkWidth;
 		Vector3 o1 = s1 + _Outward * SidewalkWidth;
 
-		// Top points
 		Vector3 t0 = s0 + up * SidewalkHeight;
 		Vector3 t1 = s1 + up * SidewalkHeight;
 		Vector3 ot0 = o0 + up * SidewalkHeight;
@@ -283,42 +475,39 @@ public partial class RoadIntersectionComponent
 		float vLen = stripLen / SidewalkTextureRepeat;
 		float hHeight = SidewalkHeight / SidewalkTextureRepeat;
 
-		// Top face
 		m_MeshBuilder.AddQuad("intersection_sidewalk", ot0, ot1, t1, t0, up, forward,
 			new Vector2(uWidth, 0), new Vector2(uWidth, vLen), new Vector2(0, vLen), new Vector2(0, 0));
-		
-		// Inner face
+
 		Vector3 innerNormal = -_Outward;
 		m_MeshBuilder.AddQuad("intersection_sidewalk", t0, t1, s1, s0, innerNormal, forward,
 			new Vector2(0, 0), new Vector2(0, vLen), new Vector2(hHeight, vLen), new Vector2(hHeight, 0));
-		
-		// Outer face
+
 		Vector3 outerNormal = _Outward;
 		m_MeshBuilder.AddQuad("intersection_sidewalk", ot1, ot0, o0, o1, outerNormal, -forward,
 			new Vector2(0, 0), new Vector2(0, vLen), new Vector2(hHeight, vLen), new Vector2(hHeight, 0));
 	}
-	
-	
-	
+
+
+
 	private Transform GetRectangleExitLocalTransform(RectangleExit _Side, bool _IncludeSidewalk = false)
 	{
 		Vector3 pos = Vector3.Zero;
 		Rotation rot = Rotation.Identity;
-		
+
 		switch (_Side)
 		{
-			case RectangleExit.North: 
+			case RectangleExit.North:
 				pos += LocalRotation.Forward * ((Length * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
 				break;
-			case RectangleExit.South: 
+			case RectangleExit.South:
 				pos -= LocalRotation.Forward * ((Length * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
 				rot *= Rotation.FromYaw(180);
 				break;
-			case RectangleExit.East:  
+			case RectangleExit.East:
 				pos += LocalRotation.Right * ((Width * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
 				rot *= Rotation.FromYaw(-90);
 				break;
-			case RectangleExit.West:  
+			case RectangleExit.West:
 				pos -= LocalRotation.Right * ((Width * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
 				rot *= Rotation.FromYaw(90);
 				break;
@@ -326,9 +515,9 @@ public partial class RoadIntersectionComponent
 
 		return new Transform { Position = pos, Rotation = rot };
 	}
-	
-	
-	
+
+
+
 	private Transform GetRectangleExitTransform(RectangleExit _Side, bool _IncludeSidewalk = false)
 	{
 		Vector3 pos = WorldPosition;
@@ -336,18 +525,18 @@ public partial class RoadIntersectionComponent
 
 		switch (_Side)
 		{
-			case RectangleExit.North: 
+			case RectangleExit.North:
 				pos += WorldRotation.Forward * ((Length * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
 				break;
-			case RectangleExit.South: 
+			case RectangleExit.South:
 				pos -= WorldRotation.Forward * ((Length * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
 				rot *= Rotation.FromYaw(180);
 				break;
-			case RectangleExit.East:  
+			case RectangleExit.East:
 				pos += WorldRotation.Right * ((Width * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
 				rot *= Rotation.FromYaw(-90);
 				break;
-			case RectangleExit.West:  
+			case RectangleExit.West:
 				pos -= WorldRotation.Right * ((Width * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
 				rot *= Rotation.FromYaw(90);
 				break;
