@@ -35,7 +35,7 @@ https://github.com/user-attachments/assets/5bdcd072-2cb1-48eb-b8d4-83d65eb1ebce
 # 📀Setup
 
 ## Road texture
-I really recommend using a triplanar shader for the road texture otherwise you will still face some issue with "seems" at some place when using a standard shader.
+I really recommend using a triplanar shader for the road texture otherwise you will still face some issue with "seems" at some places when using a standard shader.
 
 Example:
 
