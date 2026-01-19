@@ -135,12 +135,14 @@ public partial class RoadComponent
 
 			float leftAvgV1 = leftAvgUVDist;
 			float rightAvgV1 = rightAvgUVDist;
+			
+			Vector3 tangentTop = WorldRotation.Right;
 
 			// Left top
 			m_MeshBuilder.AddQuad("sidewalk",
 				lt0, lt1, lto1, lto0,
 				u0, u1, u1, u0,
-				forward,
+				tangentTop,
 				new Vector2(0, leftAvgV0), new Vector2(0, leftAvgV1), new Vector2(1, leftAvgV1), new Vector2(1, leftAvgV0));
 
 			// Left inner
@@ -161,7 +163,7 @@ public partial class RoadComponent
 			m_MeshBuilder.AddQuad("sidewalk",
 				rt0, rto0, rto1, rt1,
 				u0, u0, u1, u1,
-				forward,
+				tangentTop,
 				new Vector2(0, rightAvgV0), new Vector2(1, rightAvgV0), new Vector2(1, rightAvgV1), new Vector2(0, rightAvgV1));
 
 			// Right inner
