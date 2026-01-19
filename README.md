@@ -32,6 +32,21 @@ https://github.com/user-attachments/assets/5bdcd072-2cb1-48eb-b8d4-83d65eb1ebce
 - Lampposts auto generated along the road
 <img width="732" height="371" alt="Lampposts" src="https://github.com/user-attachments/assets/58aaa989-0a56-4b74-a535-40ed194a81e6" />
 
+# 📀Setup
+
+## Sidewalk texture
+The sidewalk texture can be just a regular seamless texture, however if you want to use a sidewalk texture with an actual sidewalk border, here is how it should be setup for the border to face the road properly:
+
+<img width="512" height="512" alt="Sidewalk Texture" src="https://github.com/user-attachments/assets/d80e871d-14d4-4ede-8cc8-c933aa98ebfd" />
+
+Demo:
+
+<img width="2458" height="1265" alt="Sidewalk Texture Demo" src="https://github.com/user-attachments/assets/f5883a28-be8e-4178-8806-1f0c402e0340" />
+
+Demo (With a proper texture):
+
+<img width="2405" height="1238" alt="Sidewalk Texture Demo (With a proper texture)" src="https://github.com/user-attachments/assets/72b25a7f-bcce-442c-82b4-c52e6f6c8ece" />
+
 # 📜Credits
 
 - [Facepunch](https://facepunch.com/) ([Spline Tools](https://sbox.game/facepunch/splinetools) was a useful resources to start making this tool)
