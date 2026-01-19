@@ -66,16 +66,16 @@ public partial class RoadIntersectionComponent
 		Vector3 pSE = right * hw - forward * hl;
 
 		// Main center quad
-		float roadU = Width / RoadTextureRepeat;
-		float roadV = Length / RoadTextureRepeat;
-
 		m_MeshBuilder.AddQuad
 		(
 			"intersection_road",
 			pSE, pNE, pNW, pSW,
 			up,
 			forward,
-			new Vector2(0, 0), new Vector2(0, roadV), new Vector2(roadU, roadV), new Vector2(roadU, 0)
+			new Vector2(pSE.x, pSE.y) / RoadTextureRepeat,
+			new Vector2(pNE.x, pNE.y) / RoadTextureRepeat,
+			new Vector2(pNW.x, pNW.y) / RoadTextureRepeat,
+			new Vector2(pSW.x, pSW.y) / RoadTextureRepeat
 		);
 
 		// Road extensions for exits
@@ -103,16 +103,16 @@ public partial class RoadIntersectionComponent
 		Vector3 extA = _CornerA + _Direction * SidewalkWidth;
 		Vector3 extB = _CornerB + _Direction * SidewalkWidth;
 
-		float extU = (_CornerB - _CornerA).Length / RoadTextureRepeat;
-		float extV = SidewalkWidth / RoadTextureRepeat;
-
 		m_MeshBuilder.AddQuad
 		(
 			"intersection_road",
 			_CornerB, extB, extA, _CornerA,
 			up,
 			_Direction,
-			new Vector2(0, 0), new Vector2(extV, 0), new Vector2(extV, extU), new Vector2(0, extU)
+			new Vector2(_CornerB.x, _CornerB.y) / RoadTextureRepeat,
+			new Vector2(extB.x, extB.y) / RoadTextureRepeat,
+			new Vector2(extA.x, extA.y) / RoadTextureRepeat,
+			new Vector2(_CornerA.x, _CornerA.y) / RoadTextureRepeat
 		);
 	}
 
@@ -141,13 +141,9 @@ public partial class RoadIntersectionComponent
 			Vector3 roadEdge0 = arcCenter - _DirB * w * MathF.Cos(angle0) - _DirA * w * MathF.Sin(angle0);
 			Vector3 roadEdge1 = arcCenter - _DirB * w * MathF.Cos(angle1) - _DirA * w * MathF.Sin(angle1);
 
-			Vector3 localCenter = WorldRotation.Inverse * (_Corner - WorldPosition);
-			Vector3 localEdge0 = WorldRotation.Inverse * (roadEdge0 - WorldPosition);
-			Vector3 localEdge1 = WorldRotation.Inverse * (roadEdge1 - WorldPosition);
-
-			Vector2 uvCenter = new Vector2(localCenter.x, localCenter.y) / RoadTextureRepeat;
-			Vector2 uvEdge0 = new Vector2(localEdge0.x, localEdge0.y) / RoadTextureRepeat;
-			Vector2 uvEdge1 = new Vector2(localEdge1.x, localEdge1.y) / RoadTextureRepeat;
+			Vector2 uvCenter = new Vector2(_Corner.x, _Corner.y) / RoadTextureRepeat;
+			Vector2 uvEdge0 = new Vector2(roadEdge0.x, roadEdge0.y) / RoadTextureRepeat;
+			Vector2 uvEdge1 = new Vector2(roadEdge1.x, roadEdge1.y) / RoadTextureRepeat;
 
 			if (flip)
 			{

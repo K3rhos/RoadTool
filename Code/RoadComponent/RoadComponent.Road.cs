@@ -57,15 +57,6 @@ public partial class RoadComponent
 			int idx0 = segmentsToKeep[i];
 			int idx1 = segmentsToKeep[i + 1];
 
-			float t0 = (float)idx0 / segmentCount;
-			float t1 = (float)idx1 / segmentCount;
-
-			float d0 = t0 * Spline.Length;
-			float d1 = t1 * Spline.Length;
-
-			float v0 = d0 / RoadTextureInchesPerRepeat;
-			float v1 = d1 / RoadTextureInchesPerRepeat;
-
 			Transform f0 = frames[idx0];
 			Transform f1 = frames[idx1];
 
@@ -86,10 +77,10 @@ public partial class RoadComponent
 			Vector3 l1 = p1 - right1 * halfWidth;
 			Vector3 r1 = p1 + right1 * halfWidth;
 
-			Vector2 uv00 = new(0, v0);
-			Vector2 uv01 = new(0, v1);
-			Vector2 uv11 = new(1, v1);
-			Vector2 uv10 = new(1, v0);
+			Vector2 uv00 = new Vector2(l0.x, l0.y) / RoadTextureInchesPerRepeat;
+			Vector2 uv10 = new Vector2(r0.x, r0.y) / RoadTextureInchesPerRepeat;
+			Vector2 uv11 = new Vector2(r1.x, r1.y) / RoadTextureInchesPerRepeat;
+			Vector2 uv01 = new Vector2(l1.x, l1.y) / RoadTextureInchesPerRepeat;
 
 			m_MeshBuilder.AddQuad("road",
 				l0, r0, r1, l1,
