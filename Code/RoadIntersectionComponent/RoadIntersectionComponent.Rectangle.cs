@@ -200,8 +200,32 @@ public partial class RoadIntersectionComponent
 			if (s && w) cornerSegments += CornerSegments;
 		}
 
-		int totalVertices = (sideCount * 12) + (4 * 12) + (endCapCount * 4) + (cornerSegments * 12);
-		int totalIndices = (sideCount * 18) + (4 * 18) + (endCapCount * 6) + (cornerSegments * 18);
+		int sideVerts = sideCount * 12;
+		int sideIndices = sideCount * 18;
+
+		int endCapVerts = endCapCount * 4;
+		int endCapIndices = endCapCount * 6;
+
+		int cornerVerts;
+		int cornerIndices;
+
+		if (CornerSegments > 0)
+		{
+			cornerVerts = cornerSegments * 12;
+			cornerIndices = cornerSegments * 18;
+
+			int remainingCorners = 4 - (cornerSegments / CornerSegments);
+			cornerVerts += remainingCorners * 22;
+			cornerIndices += remainingCorners * 30;
+		}
+		else
+		{
+			cornerVerts = 4 * 22;
+			cornerIndices = 4 * 30;
+		}
+
+		int totalVertices = sideVerts + endCapVerts + cornerVerts;
+		int totalIndices = sideIndices + endCapIndices + cornerIndices;
 
 		m_MeshBuilder.InitSubmesh
 		(
@@ -311,6 +335,9 @@ public partial class RoadIntersectionComponent
 			float v0 = (t0 * totalArcLength) / SidewalkTextureRepeat;
 			float v1 = (t1 * totalArcLength) / SidewalkTextureRepeat;
 
+			float distOuter0 = Vector3.DistanceBetween(inner0, outer0) / SidewalkTextureRepeat;
+			float distOuter1 = Vector3.DistanceBetween(inner1, outer1) / SidewalkTextureRepeat;
+
 			Vector3 outerTangent = (outer1 - outer0).Normal;
 			Vector3 outerNormal = flip ? Vector3.Cross(outerTangent, up) : Vector3.Cross(up, outerTangent);
 
@@ -323,7 +350,7 @@ public partial class RoadIntersectionComponent
 					topOuter0, topOuter1, topInner1, topInner0,
 					up,
 					(_DirA + _DirB).Normal,
-					new Vector2(uW, v0), new Vector2(uW, v1), new Vector2(0, v1), new Vector2(0, v0)
+					new Vector2(distOuter0, v0), new Vector2(distOuter1, v1), new Vector2(0, v1), new Vector2(0, v0)
 				);
 
 				// Inner face
@@ -355,7 +382,7 @@ public partial class RoadIntersectionComponent
 					topInner0, topInner1, topOuter1, topOuter0,
 					up,
 					(_DirA + _DirB).Normal,
-					new Vector2(0, v0), new Vector2(0, v1), new Vector2(uW, v1), new Vector2(uW, v0)
+					new Vector2(0, v0), new Vector2(0, v1), new Vector2(distOuter1, v1), new Vector2(distOuter0, v0)
 				);
 
 				// Inner face
@@ -405,11 +432,18 @@ public partial class RoadIntersectionComponent
 		float uW = SidewalkWidth / SidewalkTextureRepeat;
 		float hH = SidewalkHeight / SidewalkTextureRepeat;
 
+		Vector2 uvA = !_SideAIsExit ? new Vector2(uW, 0) : new Vector2(0, uW);
+		Vector2 uvB = !_SideBIsExit ? new Vector2(uW, 0) : new Vector2(0, uW);
+
+		Vector3 tangent = (_DirA + _DirB).Normal;
+
 		if (flip)
 		{
 			// Top face
-			m_MeshBuilder.AddQuad("intersection_sidewalk", tOuter, tB, tCenter, tA, up, _DirA,
-				new Vector2(uW, uW), new Vector2(0, uW), new Vector2(0, 0), new Vector2(uW, 0));
+			m_MeshBuilder.AddTriangle("intersection_sidewalk", tOuter, tCenter, tA, up, tangent,
+				new Vector2(uW, uW), new Vector2(0, 0), uvA);
+			m_MeshBuilder.AddTriangle("intersection_sidewalk", tOuter, tB, tCenter, up, tangent,
+				new Vector2(uW, uW), uvB, new Vector2(0, 0));
 
 			// Outer faces
 			m_MeshBuilder.AddQuad("intersection_sidewalk", tA, pA, pOuter, tOuter, _DirA, _DirB,
@@ -421,8 +455,10 @@ public partial class RoadIntersectionComponent
 		else
 		{
 			// Top face
-			m_MeshBuilder.AddQuad("intersection_sidewalk", tOuter, tA, tCenter, tB, up, _DirA,
-				new Vector2(uW, uW), new Vector2(0, uW), new Vector2(0, 0), new Vector2(uW, 0));
+			m_MeshBuilder.AddTriangle("intersection_sidewalk", tOuter, tA, tCenter, up, tangent,
+				new Vector2(uW, uW), uvA, new Vector2(0, 0));
+			m_MeshBuilder.AddTriangle("intersection_sidewalk", tOuter, tCenter, tB, up, tangent,
+				new Vector2(uW, uW), new Vector2(0, 0), uvB);
 
 			// Outer faces
 			m_MeshBuilder.AddQuad("intersection_sidewalk", tOuter, pOuter, pA, tA, _DirA, -_DirB,
