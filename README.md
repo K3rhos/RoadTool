@@ -34,6 +34,14 @@ https://github.com/user-attachments/assets/5bdcd072-2cb1-48eb-b8d4-83d65eb1ebce
 
 # 📀Setup
 
+## Road texture
+I really recommend using a triplanar shader for the road texture otherwise you will still face some issue with "seems" at some place when using a standard shader.
+
+Example:
+
+<img width="1353" height="692" alt="Road Material Standard Shader" src="https://github.com/user-attachments/assets/610a975a-c0d9-431b-ad79-1fef0c2c6eaa" />
+<img width="1353" height="692" alt="Road Material Triplanar Shader" src="https://github.com/user-attachments/assets/4a637e44-5758-4ff5-8fa5-b727889f68f2" />
+
 ## Sidewalk texture
 The sidewalk texture can be just a regular seamless texture, however if you want to use a sidewalk texture with an actual sidewalk border, here is how it should be setup for the border to face the road properly:
 
