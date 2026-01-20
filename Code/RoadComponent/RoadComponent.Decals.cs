@@ -40,7 +40,7 @@ public partial class RoadComponent
 	private void RemoveDecals()
 	{
 		// If we're in play mode, do not clear them
-		if (Game.IsPlaying)
+		if (LoadingScreen.IsVisible || Game.IsPlaying)
 			return;
 
 		GameObject containerObject = GameObject.Children.FirstOrDefault(x => x.Name == "Decals");
@@ -71,7 +71,7 @@ public partial class RoadComponent
 	private void BuildDecals()
 	{
 		// If we're in play mode, do not rebuild them
-		if (Game.IsPlaying)
+		if (LoadingScreen.IsVisible || Game.IsPlaying)
 			return;
 
 		GameObject containerObject = GameObject.Children.FirstOrDefault(x => x.Name == "Decals");

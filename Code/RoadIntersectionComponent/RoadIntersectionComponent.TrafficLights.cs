@@ -67,7 +67,7 @@ public partial class RoadIntersectionComponent
 	private void RemoveTrafficLights()
 	{
 		// If we're in play mode, do not clear them
-		if (Game.IsPlaying)
+		if (LoadingScreen.IsVisible || Game.IsPlaying)
 			return;
 
 		GameObject containerObject = GameObject.Children.FirstOrDefault(x => x.Name == "TrafficLights");
@@ -98,7 +98,7 @@ public partial class RoadIntersectionComponent
 	private void BuildTrafficLights()
 	{
 		// If we're in play mode, do not rebuild them
-		if (Game.IsPlaying)
+		if (LoadingScreen.IsVisible || Game.IsPlaying)
 			return;
 
 		// Only build for rectangle intersections
