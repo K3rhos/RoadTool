@@ -12,9 +12,9 @@ public class CircleExit
 
 public partial class RoadIntersectionComponent
 {
-	[Property, ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private float Radius { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 600.0f;
-	[Property, ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private float Precision { get; set { field = value.Clamp(10.0f, 10000.0f); m_MeshBuilder?.IsDirty = true; } } = 40.0f;
-	[Property(Title = "Exits"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private List<CircleExit> CircleExits { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = new();
+	[Property, Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private float Radius { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 600.0f;
+	[Property, Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private float Precision { get; set { field = value.Clamp(10.0f, 10000.0f); m_MeshBuilder?.IsDirty = true; } } = 40.0f;
+	[Property(Title = "Exits"), Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private List<CircleExit> CircleExits { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = new();
 
 
 
@@ -30,7 +30,7 @@ public partial class RoadIntersectionComponent
 
 	private void BuildCircleRoad()
 	{
-		Vector3 up = WorldRotation.Up;
+		Vector3 up = Vector3.Up;
 		int segments = GetCircleSegmentCount();
 		float step = 360.0f / segments;
 
@@ -63,7 +63,7 @@ public partial class RoadIntersectionComponent
 
 	private void BuildCircleSidewalk()
 	{
-		Vector3 up = WorldRotation.Up;
+		Vector3 up = Vector3.Up;
 		int segments = GetCircleSegmentCount();
 		float step = 360f / segments;
 

@@ -135,7 +135,7 @@ public partial class RoadComponent
 
 			float leftAvgV1 = leftAvgUVDist;
 			float rightAvgV1 = rightAvgUVDist;
-			
+
 			Vector3 tangentTop = WorldRotation.Right;
 
 			// Left top

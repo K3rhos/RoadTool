@@ -18,10 +18,10 @@ public partial class RoadIntersectionComponent
 {
 	private static readonly float QuarterTurnRad = MathF.PI * 0.5f;
 
-	[Property, ShowIf(nameof(Shape), IntersectionShape.Rectangle)] private float Width { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 500.0f;
-	[Property, ShowIf(nameof(Shape), IntersectionShape.Rectangle)] private float Length { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 500.0f;
-	[Property, ShowIf(nameof(Shape), IntersectionShape.Rectangle), Range(0, 16), Step(2)] private int CornerSegments { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 8;
-	[Property(Title = "Exits"), ShowIf(nameof(Shape), IntersectionShape.Rectangle)] private RectangleExit RectangleExits { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = (RectangleExit)15;
+	[Property, Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Rectangle)] private float Width { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 500.0f;
+	[Property, Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Rectangle)] private float Length { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 500.0f;
+	[Property, Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Rectangle), Range(0, 16), Step(2)] private int CornerSegments { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 8;
+	[Property(Title = "Exits"), Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Rectangle)] private RectangleExit RectangleExits { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = (RectangleExit)15;
 
 
 
@@ -53,9 +53,9 @@ public partial class RoadIntersectionComponent
 			_HasCollision: true
 		);
 
-		Vector3 right = WorldRotation.Right;
-		Vector3 forward = WorldRotation.Forward;
-		Vector3 up = WorldRotation.Up;
+		Vector3 right = Vector3.Right;
+		Vector3 forward = Vector3.Forward;
+		Vector3 up = Vector3.Up;
 
 		float hw = Width * 0.5f;
 		float hl = Length * 0.5f;
@@ -98,7 +98,7 @@ public partial class RoadIntersectionComponent
 
 	private void AddRoadExtension(Vector3 _CornerA, Vector3 _CornerB, Vector3 _Direction)
 	{
-		Vector3 up = WorldRotation.Up;
+		Vector3 up = Vector3.Up;
 
 		Vector3 extA = _CornerA + _Direction * SidewalkWidth;
 		Vector3 extB = _CornerB + _Direction * SidewalkWidth;
@@ -120,7 +120,7 @@ public partial class RoadIntersectionComponent
 
 	private void AddRoadCornerFiller(Vector3 _Corner, Vector3 _DirA, Vector3 _DirB)
 	{
-		Vector3 up = WorldRotation.Up;
+		Vector3 up = Vector3.Up;
 		float w = SidewalkWidth;
 
 		Vector3 arcCenter = _Corner + _DirA * w + _DirB * w;
@@ -128,8 +128,8 @@ public partial class RoadIntersectionComponent
 		Vector3 cross = Vector3.Cross(_DirA, _DirB);
 		bool flip = Vector3.Dot(cross, up) >= 0;
 
-		Vector3 tangent = WorldRotation.Right;
-		
+		Vector3 tangent = Vector3.Right;
+
 		for (int i = 0; i < CornerSegments; i++)
 		{
 			float t0 = (float)i / CornerSegments;
@@ -232,8 +232,8 @@ public partial class RoadIntersectionComponent
 			true
 		);
 
-		Vector3 right = WorldRotation.Right;
-		Vector3 forward = WorldRotation.Forward;
+		Vector3 right = Vector3.Right;
+		Vector3 forward = Vector3.Forward;
 		float hw = Width * 0.5f;
 		float hl = Length * 0.5f;
 
@@ -276,7 +276,7 @@ public partial class RoadIntersectionComponent
 
 	private void AddRoundedSidewalkCorner(Vector3 _Corner, Vector3 _DirA, Vector3 _DirB)
 	{
-		Vector3 up = WorldRotation.Up;
+		Vector3 up = Vector3.Up;
 		float h = SidewalkHeight;
 		float w = SidewalkWidth;
 
@@ -337,8 +337,8 @@ public partial class RoadIntersectionComponent
 			Vector3 outerTangent = (outer1 - outer0).Normal;
 			Vector3 outerNormal = flip ? Vector3.Cross(outerTangent, up) : Vector3.Cross(up, outerTangent);
 
-			Vector3 tangentTop = WorldRotation.Right;
-			
+			Vector3 tangentTop = Vector3.Right;
+
 			if (flip)
 			{
 				// Top face
@@ -410,7 +410,7 @@ public partial class RoadIntersectionComponent
 
 	private void AddCornerCap(Vector3 _CornerPos, Vector3 _DirA, Vector3 _DirB, bool _SideAIsExit, bool _SideBIsExit)
 	{
-		Vector3 up = WorldRotation.Up;
+		Vector3 up = Vector3.Up;
 		float h = SidewalkHeight;
 		float w = SidewalkWidth;
 
@@ -433,7 +433,7 @@ public partial class RoadIntersectionComponent
 		Vector2 uvA = !_SideAIsExit ? new Vector2(uW, 0) : new Vector2(0, uW);
 		Vector2 uvB = !_SideBIsExit ? new Vector2(uW, 0) : new Vector2(0, uW);
 
-		Vector3 tangentTop = WorldRotation.Right;
+		Vector3 tangentTop = Vector3.Right;
 
 		if (flip)
 		{
@@ -491,7 +491,7 @@ public partial class RoadIntersectionComponent
 
 	private void AddSidewalkStrip(Vector3 _Start, Vector3 _End, Vector3 _Outward)
 	{
-		Vector3 up = WorldRotation.Up;
+		Vector3 up = Vector3.Up;
 		Vector3 forward = (_End - _Start).Normal;
 
 		Vector3 s0 = _Start;
@@ -509,8 +509,8 @@ public partial class RoadIntersectionComponent
 		float vLen = stripLen / SidewalkTextureRepeat;
 		float hHeight = SidewalkHeight / SidewalkTextureRepeat;
 
-		Vector3 tangentTop = WorldRotation.Right;
-		
+		Vector3 tangentTop = Vector3.Right;
+
 		// Top face
 		m_MeshBuilder.AddQuad("intersection_sidewalk", ot0, ot1, t1, t0, up, tangentTop,
 			new Vector2(uWidth, 0), new Vector2(uWidth, vLen), new Vector2(0, vLen), new Vector2(0, 0));
@@ -536,18 +536,18 @@ public partial class RoadIntersectionComponent
 		switch (_Side)
 		{
 			case RectangleExit.North:
-				pos += LocalRotation.Forward * ((Length * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
+				pos += Vector3.Forward * ((Length * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
 				break;
 			case RectangleExit.South:
-				pos -= LocalRotation.Forward * ((Length * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
+				pos -= Vector3.Forward * ((Length * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
 				rot *= Rotation.FromYaw(180);
 				break;
 			case RectangleExit.East:
-				pos += LocalRotation.Right * ((Width * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
+				pos += Vector3.Right * ((Width * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
 				rot *= Rotation.FromYaw(-90);
 				break;
 			case RectangleExit.West:
-				pos -= LocalRotation.Right * ((Width * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
+				pos -= Vector3.Right * ((Width * 0.5f) + (_IncludeSidewalk ? SidewalkWidth : 0.0f));
 				rot *= Rotation.FromYaw(90);
 				break;
 		}

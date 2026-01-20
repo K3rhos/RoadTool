@@ -24,15 +24,15 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 {
 	private MeshBuilder m_MeshBuilder;
 
-	[Property, Order(0)] private IntersectionShape Shape { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = IntersectionShape.Rectangle;
+	[Property, Feature("General", Icon = "people", Tint = EditorTint.White), Order(0)] private IntersectionShape Shape { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = IntersectionShape.Rectangle;
 
-	[Property(Title = "Material"), Order(0)] private Material RoadMaterial { get; set { field = value; m_MeshBuilder?.IsDirty = true; } }
-	[Property(Title = "Texture Repeat"), Order(0)] private float RoadTextureRepeat { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 500.0f;
+	[Property(Title = "Material"), Feature("General"), Order(0)] private Material RoadMaterial { get; set { field = value; m_MeshBuilder?.IsDirty = true; } }
+	[Property(Title = "Texture Repeat"), Feature("General"), Order(0)] private float RoadTextureRepeat { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 500.0f;
 
-	[Property(Title = "Material"), Category("Sidewalk"), Order(3)] private Material SidewalkMaterial { get; set { field = value; m_MeshBuilder?.IsDirty = true; } }
-	[Property(Title = "Width"), Category("Sidewalk"), Order(3)] private float SidewalkWidth { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 150.0f;
-	[Property(Title = "Height"), Category("Sidewalk"), Order(3)] private float SidewalkHeight { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 5.0f;
-	[Property(Title = "Texture Repeat"), Category("Sidewalk"), Order(3)] private float SidewalkTextureRepeat { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 200.0f;
+	[Property(Title = "Material"), Feature("General"), Category("Sidewalk"), Order(3)] private Material SidewalkMaterial { get; set { field = value; m_MeshBuilder?.IsDirty = true; } }
+	[Property(Title = "Width"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkWidth { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 150.0f;
+	[Property(Title = "Height"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkHeight { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 5.0f;
+	[Property(Title = "Texture Repeat"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkTextureRepeat { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 200.0f;
 
 
 
@@ -41,6 +41,8 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 		m_MeshBuilder = new MeshBuilder(GameObject);
 		m_MeshBuilder.OnBuild += BuildAllMeshes;
 		m_MeshBuilder.Rebuild();
+
+		CreateTrafficLights();
 	}
 
 
@@ -49,6 +51,8 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 	{
 		m_MeshBuilder?.OnBuild -= BuildAllMeshes;
 		m_MeshBuilder?.Clear();
+
+		RemoveTrafficLights();
 	}
 
 
@@ -56,6 +60,8 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 	protected override void OnUpdate()
 	{
 		m_MeshBuilder?.Update();
+
+		UpdateTrafficLights();
 	}
 
 
@@ -139,7 +145,7 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 
 
 
-	[Button("Snap Nearby Roads (WIP)"), ShowIf(nameof(Shape), IntersectionShape.Rectangle), Order(10)]
+	[Button("Snap Nearby Roads (WIP)"), Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Rectangle), Order(10)]
 	public void SnapNearbyRoads()
 	{
 		var roads = Scene.GetAll<RoadComponent>().ToList();
