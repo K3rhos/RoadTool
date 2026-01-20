@@ -6,7 +6,7 @@ The road layout is controlled by an editable spline, allowing you to easily adju
 
 This system also procedurally handles sidewalks, decals, and streetlights placement, removing the need to manually place props along the road. All elements adapt dynamically based on the road’s configuration.
 
-**NOTE: Assets shown in some of the screenshots below (e.g. Materials, Textures...) are not featured in this repository**
+**NOTE: Assets shown in some of the screenshots/videos (e.g. Models, Materials, Textures...) are not featured with this repository**
 
 <img width="2507" height="1282" alt="Overview" src="https://github.com/user-attachments/assets/d4dfa537-9985-4e69-8334-045d6a752c5a" />
 
