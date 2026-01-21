@@ -53,6 +53,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 		CreateLanes();
 		CreateDecals();
 		CreateLampposts();
+		CreateCrosswalks();
 	}
 
 
@@ -65,6 +66,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 		RemoveLanes();
 		RemoveDecals();
 		RemoveLampposts();
+		RemoveCrosswalks();
 	}
 
 
@@ -75,6 +77,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 		UpdateLanes();
 		UpdateDecals();
 		UpdateLampposts();
+		UpdateCrosswalks();
 	}
 
 
