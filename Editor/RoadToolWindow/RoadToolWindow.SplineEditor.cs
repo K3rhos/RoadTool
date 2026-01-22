@@ -190,7 +190,7 @@ public partial class RoadToolWindow
 		SelectedPointIndex = _Index;
 		_inTangentSelected = false;
 		_outTangentSelected = false;
-		
+
 		UpdateWindowTitle();
 	}
 }

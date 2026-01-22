@@ -224,8 +224,41 @@ public partial class RoadComponent
 			return 0.0f;
 
 		float dot = Vector3.Dot(dir1, dir2).Clamp(-1.0f, 1.0f);
-		float angleRadians = MathF.Acos(dot);
+		float angleRadians = float.Acos(dot);
 
 		return angleRadians.RadianToDegree();
+	}
+
+
+
+	private static Transform InterpolateFrameAtDistance(List<(Transform frame, float distance)> _SimplifiedPositions, float _TargetDistance)
+	{
+		// Find the segment containing the target distance
+		for (int i = 0; i < _SimplifiedPositions.Count - 1; i++)
+		{
+			float d0 = _SimplifiedPositions[i].distance;
+			float d1 = _SimplifiedPositions[i + 1].distance;
+
+			if (_TargetDistance >= d0 && _TargetDistance <= d1)
+			{
+				// Interpolate between these two frames
+				float segmentLength = d1 - d0;
+				float t = segmentLength > 0 ? (_TargetDistance - d0) / segmentLength : 0;
+
+				Transform f0 = _SimplifiedPositions[i].frame;
+				Transform f1 = _SimplifiedPositions[i + 1].frame;
+
+				Vector3 position = Vector3.Lerp(f0.Position, f1.Position, t);
+				Rotation rotation = Rotation.Slerp(f0.Rotation, f1.Rotation, t);
+
+				return new Transform(position, rotation);
+			}
+		}
+
+		// If not found, return the closest frame
+		if (_TargetDistance <= _SimplifiedPositions[0].distance)
+			return _SimplifiedPositions[0].frame;
+
+		return _SimplifiedPositions[^1].frame;
 	}
 }

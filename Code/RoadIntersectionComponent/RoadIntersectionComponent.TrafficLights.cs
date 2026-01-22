@@ -61,9 +61,9 @@ public partial class RoadIntersectionComponent
 
 		BuildTrafficLights();
 	}
-	
-	
-	
+
+
+
 	private void RemoveTrafficLights()
 	{
 		// If we're in play mode, do not clear them
@@ -80,9 +80,9 @@ public partial class RoadIntersectionComponent
 			}
 		}
 	}
-	
-	
-	
+
+
+
 	private void UpdateTrafficLights()
 	{
 		if (m_DoesTrafficLightsNeedRebuild)

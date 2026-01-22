@@ -32,7 +32,7 @@ public partial class RoadComponent
 	private void CreateCrosswalks()
 	{
 		RemoveCrosswalks();
-		
+
 		if (!HasCrosswalks || !CrosswalkDefinition.IsValid())
 			return;
 
@@ -90,21 +90,21 @@ public partial class RoadComponent
 		var frames = UseRotationMinimizingFrames
 			? CalculateRotationMinimizingTangentFrames(Spline, sampleCount)
 			: CalculateTangentFramesUsingUpDir(Spline, sampleCount);
-		
+
 		if (CrosswalkConfig is CrosswalkConfig.Start or CrosswalkConfig.Both)
 		{
 			Transform roadStart = frames.FirstOrDefault();
-		
+
 			Vector3 position = roadStart.Position;
 			Rotation rotation = Rotation.LookAt(-roadStart.Rotation.Up, roadStart.Rotation.Forward);
 
-			CreateCrosswalk(containerObject, position, rotation);	
+			CreateCrosswalk(containerObject, position, rotation);
 		}
-		
+
 		if (CrosswalkConfig is CrosswalkConfig.End or CrosswalkConfig.Both)
 		{
 			Transform roadEnd = frames.LastOrDefault();
-		
+
 			Vector3 position = roadEnd.Position;
 			Rotation rotation = Rotation.LookAt(-roadEnd.Rotation.Up, roadEnd.Rotation.Forward);
 
@@ -124,7 +124,7 @@ public partial class RoadComponent
 
 		Decal decal = gameObject.AddComponent<Decal>();
 
-		decal.Decals = [ CrosswalkDefinition ];
+		decal.Decals = [CrosswalkDefinition];
 		decal.Rotation = new ParticleFloat(0.0f, 0.0f);
 		decal.Size = CrosswalkSize;
 		decal.Depth = 4.0f;

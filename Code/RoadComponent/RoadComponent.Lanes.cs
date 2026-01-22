@@ -84,12 +84,12 @@ public partial class RoadComponent
 		int quadsPerSegment = LaneCount;
 		int vertsPerSegment = quadsPerSegment * 4;
 		int indicesPerSegment = quadsPerSegment * 6;
-		
+
 		for (int lane = 0; lane < LaneCount; lane++)
 		{
 			// Use the material at the index, or the last available, or default
 			Material material = (LaneMaterials != null && LaneMaterials.Length > lane) ? LaneMaterials[lane] : (LaneMaterials?.FirstOrDefault() ?? Material.Load("materials/default.vmat"));
-			
+
 			m_LanesBuilder.InitSubmesh
 			(
 				$"lane_{lane}",

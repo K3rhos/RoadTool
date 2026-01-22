@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using Sandbox;
 
 namespace RedSnail.RoadTool;
@@ -77,9 +78,9 @@ public partial class RoadComponent
 			m_DoesLamppostsNeedRebuild = false;
 		}
 	}
-
-
-
+	
+	
+	
 	private void BuildLampposts()
 	{
 		// If we're in play mode, do not rebuild them
@@ -97,17 +98,43 @@ public partial class RoadComponent
 		if (effectiveLength <= 0)
 			return;
 
+		// Calculate base segments using the same logic as road/sidewalk
+		int baseSegmentCount = Math.Max(2, (int)Math.Ceiling(Spline.Length / RoadPrecision));
+		int baseFrameCount = baseSegmentCount + 1;
+
+		var frames = UseRotationMinimizingFrames
+			? CalculateRotationMinimizingTangentFrames(Spline, baseFrameCount)
+			: CalculateTangentFramesUsingUpDir(Spline, baseFrameCount);
+
+		var segmentsToKeep = new List<int>();
+
+		if (AutoSimplify)
+		{
+			segmentsToKeep = DetectImportantSegments(frames, baseSegmentCount, MinSegmentsToMerge, StraightThreshold);
+		}
+		else
+		{
+			for (int i = 0; i <= baseSegmentCount; i++)
+			{
+				segmentsToKeep.Add(i);
+			}
+		}
+
+		var simplifiedPositions = new List<(Transform _Frame, float _Distance)>();
+
+		foreach (int index in segmentsToKeep)
+		{
+			float t = (float)index / (baseFrameCount - 1);
+			float distance = t * splineLength;
+
+			simplifiedPositions.Add((frames[index], distance));
+		}
+
 		int lamppostCount = Math.Max(1, (int)MathF.Ceiling(effectiveLength / LamppostSpacing));
 		int frameCount = lamppostCount + 1;
 
-		var frames = UseRotationMinimizingFrames
-			? CalculateRotationMinimizingTangentFrames(Spline, frameCount)
-			: CalculateTangentFramesUsingUpDir(Spline, frameCount);
-
 		float roadEdgeOffset = RoadWidth * 0.5f;
 		float sidewalkOffset = HasSidewalk ? SidewalkWidth : 0.0f;
-
-		// Calculate total offset from road center
 		float totalOffset = roadEdgeOffset + sidewalkOffset + LamppostOffsetFromSidewalk;
 
 		for (int i = 0; i < frameCount; i++)
@@ -119,7 +146,8 @@ public partial class RoadComponent
 			if (distance < StartOffset || distance > splineLength - EndOffset)
 				continue;
 
-			Transform frame = frames[i];
+			// Interpolate frame at this distance along the simplified spline
+			Transform frame = InterpolateFrameAtDistance(simplifiedPositions, distance);
 
 			Vector3 basePosition = frame.Position;
 			Vector3 forward = frame.Rotation.Forward;
