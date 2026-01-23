@@ -78,9 +78,9 @@ public partial class RoadComponent
 			m_DoesLamppostsNeedRebuild = false;
 		}
 	}
-	
-	
-	
+
+
+
 	private void BuildLampposts()
 	{
 		// If we're in play mode, do not rebuild them
