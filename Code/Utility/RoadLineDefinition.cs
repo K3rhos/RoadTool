@@ -2,8 +2,8 @@ using Sandbox;
 
 namespace RedSnail.RoadTool;
 
-[AssetType(Name = "Lane Definition", Extension = "lane", Category = "Road Tool")]
-public sealed class LaneDefinition : GameResource
+[AssetType(Name = "Road Line Definition", Extension = "roadline", Category = "Road Tool")]
+public sealed class RoadLineDefinition : GameResource
 {
 	public Material Material { get; set; }
 

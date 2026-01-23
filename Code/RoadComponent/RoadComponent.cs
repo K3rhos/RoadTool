@@ -27,7 +27,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 			field = value;
 
 			m_MeshBuilder?.IsDirty = value;
-			m_LanesBuilder?.IsDirty = value;
+			m_LinesBuilder?.IsDirty = value;
 			m_DoesLamppostsNeedRebuild = value;
 		}
 	}
@@ -50,7 +50,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 		Spline.SplineChanged += UpdateData;
 
 		CreateMeshBuilder();
-		CreateLanes();
+		CreateLines();
 		CreateDecals();
 		CreateLampposts();
 		CreateCrosswalks();
@@ -63,7 +63,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 		Spline.SplineChanged -= UpdateData;
 
 		RemoveMeshBuilder();
-		RemoveLanes();
+		RemoveLines();
 		RemoveDecals();
 		RemoveLampposts();
 		RemoveCrosswalks();
@@ -74,7 +74,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 	protected override void OnUpdate()
 	{
 		UpdateMeshBuilder();
-		UpdateLanes();
+		UpdateLines();
 		UpdateDecals();
 		UpdateLampposts();
 		UpdateCrosswalks();
