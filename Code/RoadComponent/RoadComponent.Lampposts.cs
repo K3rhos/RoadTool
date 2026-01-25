@@ -207,12 +207,11 @@ public partial class RoadComponent
 			return;
 
 		GameObject lamppostObject = LamppostPrefab.Clone(_Parent, _Position, _Rotation, Vector3.One);
-		lamppostObject.BreakFromPrefab();
-
+		
 		if (!lamppostObject.IsValid())
 			return;
 
-		lamppostObject.Name = "Lamppost";
+		// lamppostObject.Name = "Lamppost";
 		lamppostObject.LocalPosition = _Position;
 		lamppostObject.LocalRotation = _Rotation;
 	}
