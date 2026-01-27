@@ -47,7 +47,7 @@ public partial class RoadComponent
 
 		if (containerObject.IsValid())
 		{
-			foreach (var gameObject in containerObject.Children.Where(decal => decal.IsValid()))
+			foreach (var gameObject in containerObject.Children.Where(x => x.IsValid()))
 			{
 				gameObject.Destroy();
 			}

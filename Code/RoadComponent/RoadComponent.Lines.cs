@@ -11,7 +11,7 @@ public partial class RoadComponent
 	[Property, FeatureEnabled("Lines", Icon = "show_chart", Tint = EditorTint.Yellow), Change] private bool HasLines { get; set; } = false;
 	[Property(Title = "Lines"), Feature("Lines")] public RoadLineDefinition[] LineDefinitions { get; set { field = value; IsDirty = true; } }
 	[Property(Title = "Offset"), Feature("Lines"), Range(0.01f, 1.0f)] private float LinesOffset { get; set { field = value; IsDirty = true; } } = 0.1f;
-	[Property(Title = "Width"), Feature("Lines"), Range(0.1f, 50.0f)] private float LinesWidth { get; set { field = value; IsDirty = true; } } = 1.0f;
+	[Property(Title = "Width"), Feature("Lines"), Range(1.0f, 50.0f)] private float LinesWidth { get; set { field = value; IsDirty = true; } } = 5.0f;
 	[Property(Title = "Extra Spacing"), Feature("Lines"), Range(0.0f, 1000.0f)] private float LinesExtraSpacing { get; set { field = value; IsDirty = true; } } = 0.0f;
 	[Property(Title = "Texture Repeat"), Feature("Lines")] private float LinesTextureRepeat { get; set { field = value.Clamp(1.0f, 100000.0f); IsDirty = true; } } = 10.0f;
 
@@ -46,9 +46,9 @@ public partial class RoadComponent
 		m_LinesBuilder?.OnBuild -= BuildLines;
 		m_LinesBuilder?.Clear();
 	}
-	
-	
-	
+
+
+
 	// TODO: Need some refactoring
 	private void BuildLines()
 	{

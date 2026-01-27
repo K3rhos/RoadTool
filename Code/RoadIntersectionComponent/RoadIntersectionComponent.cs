@@ -24,7 +24,7 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 {
 	private MeshBuilder m_MeshBuilder;
 
-	[Property, Feature("General", Icon = "people", Tint = EditorTint.White), Order(0)] private IntersectionShape Shape { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = IntersectionShape.Rectangle;
+	[Property, Feature("General", Icon = "public", Tint = EditorTint.White), Order(0)] private IntersectionShape Shape { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = IntersectionShape.Rectangle;
 
 	[Property(Title = "Material"), Feature("General"), Order(0)] private Material RoadMaterial { get; set { field = value; m_MeshBuilder?.IsDirty = true; } }
 	[Property(Title = "Texture Repeat"), Feature("General"), Order(0)] private float RoadTextureRepeat { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 500.0f;

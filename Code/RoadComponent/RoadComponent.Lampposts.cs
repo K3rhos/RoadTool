@@ -60,7 +60,7 @@ public partial class RoadComponent
 
 		if (containerObject.IsValid())
 		{
-			foreach (var gameObject in containerObject.Children.Where(decal => decal.IsValid()))
+			foreach (var gameObject in containerObject.Children.Where(x => x.IsValid()))
 			{
 				gameObject.Destroy();
 			}
@@ -207,7 +207,7 @@ public partial class RoadComponent
 			return;
 
 		GameObject lamppostObject = LamppostPrefab.Clone(_Parent, _Position, _Rotation, Vector3.One);
-		
+
 		if (!lamppostObject.IsValid())
 			return;
 

@@ -74,7 +74,7 @@ public partial class RoadIntersectionComponent
 
 		if (containerObject.IsValid())
 		{
-			foreach (var gameObject in containerObject.Children.Where(light => light.IsValid()))
+			foreach (var gameObject in containerObject.Children.Where(x => x.IsValid()))
 			{
 				gameObject.Destroy();
 			}
