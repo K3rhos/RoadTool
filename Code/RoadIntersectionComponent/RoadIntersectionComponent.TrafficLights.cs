@@ -66,18 +66,11 @@ public partial class RoadIntersectionComponent
 
 	private void RemoveTrafficLights()
 	{
-		// If we're in play mode, do not clear them
-		if (LoadingScreen.IsVisible || Game.IsPlaying)
-			return;
-
 		GameObject containerObject = GameObject.Children.FirstOrDefault(x => x.Name == "TrafficLights");
 
 		if (containerObject.IsValid())
 		{
-			foreach (var gameObject in containerObject.Children.Where(x => x.IsValid()))
-			{
-				gameObject.Destroy();
-			}
+			containerObject.Destroy();
 		}
 	}
 
@@ -97,19 +90,13 @@ public partial class RoadIntersectionComponent
 
 	private void BuildTrafficLights()
 	{
-		// If we're in play mode, do not rebuild them
-		if (LoadingScreen.IsVisible || Game.IsPlaying)
-			return;
-
 		// Only build for rectangle intersections
 		if (Shape != IntersectionShape.Rectangle)
 			return;
 
-		GameObject containerObject = GameObject.Children.FirstOrDefault(x => x.Name == "TrafficLights");
-
-		if (!containerObject.IsValid())
-			containerObject = new GameObject(GameObject, true, "TrafficLights");
-
+		GameObject containerObject = new GameObject(GameObject, true, "TrafficLights");
+		containerObject.Flags |= GameObjectFlags.NotSaved;
+		
 		Vector3 up = WorldRotation.Up;
 		float sidewalkOffset = SidewalkWidth;
 
@@ -162,12 +149,13 @@ public partial class RoadIntersectionComponent
 			return;
 
 		GameObject trafficLightObject = TrafficLightPrefab.Clone(_Parent, _Position, _Rotation, Vector3.One);
-		trafficLightObject.BreakFromPrefab();
 
 		if (!trafficLightObject.IsValid())
 			return;
 
-		trafficLightObject.Name = "TrafficLight";
+		trafficLightObject.BreakFromPrefab();
+		
+		trafficLightObject.Flags |= GameObjectFlags.NotSaved;
 		trafficLightObject.LocalPosition = _Position;
 		trafficLightObject.LocalRotation = _Rotation;
 	}

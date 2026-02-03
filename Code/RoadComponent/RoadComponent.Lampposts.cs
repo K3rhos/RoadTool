@@ -52,18 +52,11 @@ public partial class RoadComponent
 
 	private void RemoveLampposts()
 	{
-		// If we're in play mode, do not clear them
-		if (LoadingScreen.IsVisible || Game.IsPlaying)
-			return;
-
 		GameObject containerObject = GameObject.Children.FirstOrDefault(x => x.Name == "Lampposts");
 
 		if (containerObject.IsValid())
 		{
-			foreach (var gameObject in containerObject.Children.Where(x => x.IsValid()))
-			{
-				gameObject.Destroy();
-			}
+			containerObject.Destroy();
 		}
 	}
 
@@ -83,15 +76,9 @@ public partial class RoadComponent
 
 	private void BuildLampposts()
 	{
-		// If we're in play mode, do not rebuild them
-		if (LoadingScreen.IsVisible || Game.IsPlaying)
-			return;
-
-		GameObject containerObject = GameObject.Children.FirstOrDefault(x => x.Name == "Lampposts");
-
-		if (!containerObject.IsValid())
-			containerObject = new GameObject(GameObject, true, "Lampposts");
-
+		GameObject containerObject = new GameObject(GameObject, true, "Lampposts");
+		containerObject.Flags |= GameObjectFlags.NotSaved;
+		
 		float splineLength = Spline.Length;
 		float effectiveLength = splineLength - StartOffset - EndOffset;
 
@@ -207,11 +194,13 @@ public partial class RoadComponent
 			return;
 
 		GameObject lamppostObject = LamppostPrefab.Clone(_Parent, _Position, _Rotation, Vector3.One);
-
+		
 		if (!lamppostObject.IsValid())
 			return;
 
-		// lamppostObject.Name = "Lamppost";
+		lamppostObject.BreakFromPrefab();
+		
+		lamppostObject.Flags |= GameObjectFlags.NotSaved;
 		lamppostObject.LocalPosition = _Position;
 		lamppostObject.LocalRotation = _Rotation;
 	}

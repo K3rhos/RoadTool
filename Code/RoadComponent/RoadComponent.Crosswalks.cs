@@ -43,18 +43,11 @@ public partial class RoadComponent
 
 	private void RemoveCrosswalks()
 	{
-		// If we're in play mode, do not clear them
-		if (LoadingScreen.IsVisible || Game.IsPlaying)
-			return;
-
 		GameObject containerObject = GameObject.Children.FirstOrDefault(x => x.Name == "Crosswalks");
 
 		if (containerObject.IsValid())
 		{
-			foreach (var gameObject in containerObject.Children.Where(decal => decal.IsValid()))
-			{
-				gameObject.Destroy();
-			}
+			containerObject.Destroy();
 		}
 	}
 
@@ -74,15 +67,9 @@ public partial class RoadComponent
 
 	private void BuildCrosswalks()
 	{
-		// If we're in play mode, do not rebuild them
-		if (LoadingScreen.IsVisible || Game.IsPlaying)
-			return;
-
-		GameObject containerObject = GameObject.Children.FirstOrDefault(x => x.Name == "Crosswalks");
-
-		if (!containerObject.IsValid())
-			containerObject = new GameObject(GameObject, true, "Crosswalks");
-
+		GameObject containerObject = new GameObject(GameObject, true, "Crosswalks");
+		containerObject.Flags |= GameObjectFlags.NotSaved;
+		
 		float splineLength = Spline.Length;
 
 		int sampleCount = Math.Max(2, (int)MathF.Ceiling(splineLength / DecalSpacing));
@@ -122,6 +109,8 @@ public partial class RoadComponent
 			LocalRotation = _Rotation
 		};
 
+		gameObject.Flags |= GameObjectFlags.NotSaved;
+		
 		Decal decal = gameObject.AddComponent<Decal>();
 
 		decal.Decals = [CrosswalkDefinition];
