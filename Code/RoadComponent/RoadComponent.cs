@@ -93,6 +93,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 	{
 		m_MeshBuilder = new MeshBuilder(GameObject);
 		m_MeshBuilder.OnBuild += BuildAllMeshes;
+		m_MeshBuilder.PhysicsSurface = HasCustomPhysics ? RoadSurface : null;
 		m_MeshBuilder.Rebuild();
 	}
 

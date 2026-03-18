@@ -40,6 +40,7 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 	{
 		m_MeshBuilder = new MeshBuilder(GameObject);
 		m_MeshBuilder.OnBuild += BuildAllMeshes;
+		m_MeshBuilder.PhysicsSurface = HasCustomPhysics ? IntersectionSurface : null;
 		m_MeshBuilder.Rebuild();
 
 		CreateTrafficLights();

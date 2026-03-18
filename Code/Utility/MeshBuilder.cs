@@ -31,6 +31,7 @@ public sealed class MeshBuilder
 	public bool IsDirty { get; set; }
 	public bool CastShadows { get; set; } = true;
 	public Action OnBuild { get; set; }
+	public Surface PhysicsSurface { get; set; }
 
 
 
@@ -261,7 +262,8 @@ public sealed class MeshBuilder
 		m_Collider.Flags |= ComponentFlags.NotCloned;
 		m_Collider.Static = true;
 
-		m_Collider.SetMeshShape(collisionVertices, collisionIndices);
+		m_Collider.Surface = PhysicsSurface;
+		m_Collider.SetMeshShape(collisionVertices, collisionIndices, PhysicsSurface);
 	}
 
 

@@ -7,6 +7,7 @@ public sealed class CustomCollider : Collider
 {
 	private List<Vector3> m_Vertices;
 	private List<int> m_Indices;
+	private Surface m_CustomSurface;
 
 	private bool IsDirty { get; set; }
 
@@ -41,6 +42,12 @@ public sealed class CustomCollider : Collider
 		// Add mesh shape to physics body
 		PhysicsShape physicsShape = physicsBody.AddMeshShape(m_Vertices, m_Indices);
 
+		// Add Surface physics body
+		if ( m_CustomSurface != null )
+		{
+			physicsShape.Surface = m_CustomSurface;
+		}
+
 		IsDirty = false;
 
 		return physicsShape;
@@ -60,11 +67,13 @@ public sealed class CustomCollider : Collider
 
 
 
-	public void SetMeshShape(List<Vector3> _Vertices, List<int> _Indices)
+	public void SetMeshShape(List<Vector3> _Vertices, List<int> _Indices, Surface _Surface = null )
 	{
 		m_Vertices = _Vertices;
 		m_Indices = _Indices;
+		m_CustomSurface = _Surface;
 
+		Surface = _Surface;
 		IsDirty = true;
 	}
 }

@@ -48,6 +48,7 @@ public partial class RoadParkingLotComponent : Component, Component.ExecuteInEdi
 		};
 
 		m_MeshBuilder.OnBuild += BuildAllMeshes;
+		m_MeshBuilder.PhysicsSurface = HasCustomPhysics ? ParkingLotSurface : null;
 		m_MeshBuilder.Rebuild();
 	}
 
