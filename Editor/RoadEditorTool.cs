@@ -13,6 +13,7 @@ public class RoadEditorTool : EditorTool
 	public override IEnumerable<EditorTool> GetSubtools()
 	{
 		yield return new IntersectionTool();
+		yield return new TerrainEditorTool();
 		// yield return new SplineEditorTool();
 	}
 
