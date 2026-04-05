@@ -72,125 +72,130 @@ public partial class RoadComponent
 			return;
 		}
 
-		// 1. Terrain and Road Parameters 
+		// 1. Terrain and Road Parameters
 		int resolution = storage.Resolution;
 		float terrainSize = storage.TerrainSize;
 		float terrainMaxHeight = storage.TerrainHeight;
 		float halfSize = terrainSize * 0.5f;
 		float roadWidthHalf = RoadWidth * 0.5f;
+		float totalRadius = roadWidthHalf + TerrainFalloffRadius;
 		int sampleCount = Math.Max(1, (int)MathF.Ceiling(Spline.Length / Math.Max(5f, TerrainStepPrecision)));
 
 		// 2. Initialization of calculation buffers
 		var heightMap = storage.HeightMap;
-
 		var updatedHeights = new float[heightMap.Length];
 		var bestDistance = new float[heightMap.Length];
-
 		for (int i = 0; i < heightMap.Length; i++)
 		{
 			updatedHeights[i] = (heightMap[i] / (float)ushort.MaxValue) * terrainMaxHeight;
 			bestDistance[i] = float.MaxValue;
 		}
 
-		// 3. Spline Sampling 
+		// 3. Spline Sampling — respect AutoSimplify to match the actual road geometry
 		var frames = UseRotationMinimizingFrames
 			? CalculateRotationMinimizingTangentFrames(Spline, sampleCount + 1)
 			: CalculateTangentFramesUsingUpDir(Spline, sampleCount + 1);
 
-		bool hasModified = false;
+		var usedIndices = AutoSimplify
+			? DetectImportantSegments(frames, sampleCount, MinSegmentsToMerge, StraightThreshold)
+			: System.Linq.Enumerable.Range(0, sampleCount + 1).ToList();
 
-		for (int i = 0; i <= sampleCount; i++)
+		int segCount = usedIndices.Count;
+		var localPositions = new Vector3[segCount];
+		var roadRightLocals = new Vector3[segCount];
+
+		// Coordinate system detection (once, based on world position)
+		var centerLocal = TerrainTarget.Transform.World.PointToLocal(WorldPosition);
+		bool localIsCentered = centerLocal.x < 0f || centerLocal.x > terrainSize || centerLocal.y < 0f || centerLocal.y > terrainSize;
+		float coordOffset = localIsCentered ? halfSize : 0f;
+
+		for (int i = 0; i < segCount; i++)
 		{
-			var frame = frames[i];
+			var frame = frames[usedIndices[i]];
 			var worldPos = WorldTransform.PointToWorld(frame.Position);
 			var worldRight = WorldRotation * frame.Rotation.Right;
+			localPositions[i] = TerrainTarget.Transform.World.PointToLocal(worldPos);
+			roadRightLocals[i] = TerrainTarget.Transform.World.Rotation.Inverse * worldRight;
+		}
 
-			// Conversion to local terrain coordinates to support rotation/translation 
-			var localPos = TerrainTarget.Transform.World.PointToLocal(worldPos);
-			var roadRightLocal = TerrainTarget.Transform.World.Rotation.Inverse * worldRight;
+		// 4. Working area bounding box (covers all segments + falloff)
+		var flatPoints = localPositions.Select(p => p.WithZ(0)).ToArray();
+		BBox localBounds = BBox.FromPoints(flatPoints);
+		int ixMin = Math.Clamp((int)MathF.Floor((localBounds.Mins.x + coordOffset - totalRadius) / terrainSize * (resolution - 1)), 0, resolution - 1);
+		int ixMax = Math.Clamp((int)MathF.Ceiling((localBounds.Maxs.x + coordOffset + totalRadius) / terrainSize * (resolution - 1)), 0, resolution - 1);
+		int iyMin = Math.Clamp((int)MathF.Floor((localBounds.Mins.y + coordOffset - totalRadius) / terrainSize * (resolution - 1)), 0, resolution - 1);
+		int iyMax = Math.Clamp((int)MathF.Ceiling((localBounds.Maxs.y + coordOffset + totalRadius) / terrainSize * (resolution - 1)), 0, resolution - 1);
 
-			// Adaptive coordinate system detection (Center vs Corner)
-			float u = localPos.x / terrainSize;
-			float v = localPos.y / terrainSize;
-			bool localIsCentered = false;
+		bool hasModified = false;
 
-			if (u < 0f || u > 1f || v < 0f || v > 1f)
+		// 5. Segment-query approach: for each pixel find the closest point on any road segment.
+		//    This correctly handles AutoSimplify where frames can be far apart.
+		for (int ix = ixMin; ix <= ixMax; ix++)
+		{
+			for (int iy = iyMin; iy <= iyMax; iy++)
 			{
-				u = (localPos.x + halfSize) / terrainSize;
-				v = (localPos.y + halfSize) / terrainSize;
-				localIsCentered = true;
-			}
+				float nodeLocalX = (ix / (float)(resolution - 1)) * terrainSize - coordOffset;
+				float nodeLocalY = (iy / (float)(resolution - 1)) * terrainSize - coordOffset;
+				Vector3 pixelPos = new Vector3(nodeLocalX, nodeLocalY, 0);
 
-			if (u < 0f || u > 1f || v < 0f || v > 1f) continue;
+				float minDist = float.MaxValue;
+				Vector3 closestLocalPos = Vector3.Zero;
+				Vector3 closestRoadRight = Vector3.Right;
 
-			int gridX = Math.Clamp((int)MathF.Round(u * (resolution - 1)), 0, resolution - 1);
-			int gridY = Math.Clamp((int)MathF.Round(v * (resolution - 1)), 0, resolution - 1);
-
-			float cellSize = terrainSize / (resolution - 1);
-			float totalRadius = roadWidthHalf + TerrainFalloffRadius;
-			int pixelRadius = (int)MathF.Ceiling(totalRadius / cellSize);
-
-			var roadRight2D = new Vector2(roadRightLocal.x, roadRightLocal.y);
-			if (roadRight2D.LengthSquared > 0.0001f)
-			{
-				roadRight2D = roadRight2D.Normal;
-			}
-			else
-			{
-				roadRight2D = new Vector2(1f, 0f);
-			}
-			Vector3 roadCenter = localPos.WithZ(0);
-
-			// Modify pixels within influence radius 
-			for (int ix = gridX - pixelRadius; ix <= gridX + pixelRadius; ix++)
-			{
-				for (int iy = gridY - pixelRadius; iy <= gridY + pixelRadius; iy++)
+				for (int s = 0; s < segCount - 1; s++)
 				{
-					if (ix < 0 || ix >= resolution || iy < 0 || iy >= resolution) continue;
+					Vector3 pA = localPositions[s].WithZ(0);
+					Vector3 pB = localPositions[s + 1].WithZ(0);
+					Vector3 ab = pB - pA;
+					float abLenSq = ab.LengthSquared;
+					float tSeg = abLenSq > 0.0001f ? Math.Clamp(Vector3.Dot(pixelPos - pA, ab) / abLenSq, 0f, 1f) : 0f;
+					float d = Vector3.DistanceBetween(pixelPos, pA + tSeg * ab);
 
-					// s&box indexing: ix (World X) is major axis, iy (World Y) is minor axis
-					// Use iy * resolution + ix to match standard storage if ix*res doesn't work 
-					int index = iy * resolution + ix;
-
-					float nodeLocalX = (ix / (float)(resolution - 1)) * terrainSize - (localIsCentered ? halfSize : 0);
-					float nodeLocalY = (iy / (float)(resolution - 1)) * terrainSize - (localIsCentered ? halfSize : 0);
-
-					Vector3 nodeLocalPos = new Vector3(nodeLocalX, nodeLocalY, 0);
-					float distance = Vector3.DistanceBetween(roadCenter, nodeLocalPos);
-
-					if (distance > totalRadius) continue;
-
-					// Height calculation with Roll and Offset 
-					var nodeLocal2D = new Vector2(nodeLocalX - localPos.x, nodeLocalY - localPos.y);
-					float lateral = Vector2.Dot(nodeLocal2D, roadRight2D);
-					float rollHeightOffset = roadRightLocal.z * lateral;
-					float roadCoreHeight = Math.Clamp(localPos.z + TerrainHeightOffset + rollHeightOffset, 0f, terrainMaxHeight);
-
-					float candidateHeight;
-					if (distance <= roadWidthHalf)
+					if (d < minDist)
 					{
-						candidateHeight = roadCoreHeight;
+						minDist = d;
+						closestLocalPos = Vector3.Lerp(localPositions[s], localPositions[s + 1], tSeg);
+						var rawRight = Vector3.Lerp(roadRightLocals[s], roadRightLocals[s + 1], tSeg);
+						closestRoadRight = rawRight.LengthSquared > 0.0001f ? rawRight.Normal : Vector3.Right;
 					}
-					else
-					{
-						float t = Math.Clamp((distance - roadWidthHalf) / TerrainFalloffRadius, 0f, 1f);
-						float smoothT = t * t * (3f - 2f * t);
-						candidateHeight = MathX.Lerp(roadCoreHeight, (heightMap[index] / (float)ushort.MaxValue) * terrainMaxHeight, smoothT);
-					}
+				}
 
-					if (distance < bestDistance[index])
-					{
-						bestDistance[index] = distance;
-						updatedHeights[index] = candidateHeight;
-						hasModified = true;
-					}
+				if (minDist > totalRadius) continue;
+
+				int index = iy * resolution + ix;
+
+				// Height calculation with Roll and Offset
+				var nodeLocal2D = new Vector2(nodeLocalX - closestLocalPos.x, nodeLocalY - closestLocalPos.y);
+				var roadRight2D = new Vector2(closestRoadRight.x, closestRoadRight.y);
+				if (roadRight2D.LengthSquared > 0.0001f) roadRight2D = roadRight2D.Normal;
+				float lateral = Vector2.Dot(nodeLocal2D, roadRight2D);
+				float rollHeightOffset = closestRoadRight.z * lateral;
+				float roadCoreHeight = Math.Clamp(closestLocalPos.z + TerrainHeightOffset + rollHeightOffset, 0f, terrainMaxHeight);
+
+				float candidateHeight;
+				if (minDist <= roadWidthHalf)
+				{
+					candidateHeight = roadCoreHeight;
+				}
+				else
+				{
+					float t = Math.Clamp((minDist - roadWidthHalf) / TerrainFalloffRadius, 0f, 1f);
+					float smoothT = t * t * (3f - 2f * t);
+					candidateHeight = MathX.Lerp(roadCoreHeight, (heightMap[index] / (float)ushort.MaxValue) * terrainMaxHeight, smoothT);
+				}
+
+				if (minDist < bestDistance[index])
+				{
+					bestDistance[index] = minDist;
+					updatedHeights[index] = candidateHeight;
+					hasModified = true;
 				}
 			}
 		}
 
 		if (hasModified)
 		{
-			// 4. Final encoding to ushort and GPU synchronization
+			// 6. Final encoding to ushort and GPU synchronization
 			for (int i = 0; i < heightMap.Length; i++)
 			{
 				heightMap[i] = (ushort)MathF.Round(Math.Clamp(updatedHeights[i], 0f, terrainMaxHeight) / terrainMaxHeight * ushort.MaxValue);
@@ -256,8 +261,12 @@ public partial class RoadComponent
 
 		var frames = UseRotationMinimizingFrames ? CalculateRotationMinimizingTangentFrames(Spline, sampleCount + 1) : CalculateTangentFramesUsingUpDir(Spline, sampleCount + 1);
 
-		// 2. Conversion of spline points to local terrain coordinates (Z=0) 
-		var localPoints = frames.Select(f => TerrainTarget.Transform.World.PointToLocal(WorldTransform.PointToWorld(f.Position)).WithZ(0)).ToArray();
+		var usedFrames = AutoSimplify
+			? DetectImportantSegments(frames, sampleCount, MinSegmentsToMerge, StraightThreshold).Select(i => frames[i])
+			: frames;
+
+		// 2. Conversion of spline points to local terrain coordinates (Z=0)
+		var localPoints = usedFrames.Select(f => TerrainTarget.Transform.World.PointToLocal(WorldTransform.PointToWorld(f.Position)).WithZ(0)).ToArray();
 
 		// 3. Coordinate system determination (Centered vs Corner) 
 		var checkPos = TerrainTarget.Transform.World.PointToLocal(WorldPosition);
