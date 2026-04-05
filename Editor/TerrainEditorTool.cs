@@ -176,14 +176,16 @@ public class TerrainEditorTool : EditorTool
             undo: () =>
             {
                 if ( !targetTerrain.IsValid() ) return;
-                targetStorage.ControlMap = oldControlMap;
+                // Re-copy to avoid reference issues
+                targetStorage.ControlMap = oldControlMap.ToArray();
                 targetStorage.StateHasChanged();
                 targetTerrain.SyncGPUTexture();
             },
             redo: () =>
             {
                 if ( !targetTerrain.IsValid() ) return;
-                targetStorage.ControlMap = newControlMap;
+                // Re-copy to avoid reference issues
+                targetStorage.ControlMap = newControlMap.ToArray();
                 targetStorage.StateHasChanged();
                 targetTerrain.SyncGPUTexture();
             } );

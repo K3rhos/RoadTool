@@ -28,7 +28,7 @@ public partial class RoadIntersectionComponent
 	public float TerrainTextureNoise { get; set; } = 0.2f;
 
 	[Property, Feature( "Terrain" ), Group( "Texture" )]
-	public TerrainMaterial[] TerrainEdgeMaterials { get; set; }
+	public TerrainMaterial[] TerrainEdgeMaterials { get; set; } = Array.Empty<TerrainMaterial>();
 
 	[Property, Feature( "Terrain" ), Group( "Texture" )]
 	public Gradient TerrainEdgeBlendGradient = new Gradient(
@@ -148,8 +148,8 @@ public partial class RoadIntersectionComponent
 			}
 
 			storage.HeightMap = heightMap;
+			storage.StateHasChanged();
 			TerrainTarget.Create();
-			TerrainTarget.SyncGPUTexture();
 		}
 	}
 
@@ -158,23 +158,40 @@ public partial class RoadIntersectionComponent
 		if ( !TerrainTarget.IsValid() || TerrainEdgeMaterials == null || TerrainEdgeMaterials.Length == 0 ) return;
 
 		var storage = TerrainTarget.Storage;
-		if ( storage == null ) return;
+		if ( storage == null || storage.ControlMap == null ) return;
 
 		int resolution = storage.Resolution;
 		float terrainSize = storage.TerrainSize;
 		float halfSize = terrainSize * 0.5f;
 
 		// Identify all material indices in the terrain storage 
+		bool materialsAdded = false;
 		var materialIndices = new int[TerrainEdgeMaterials.Length];
 		for ( int m = 0; m < TerrainEdgeMaterials.Length; m++ )
 		{
+			if ( TerrainEdgeMaterials[m] == null ) continue;
+
 			int idx = storage.Materials.IndexOf( TerrainEdgeMaterials[m] );
 			if ( idx == -1 )
 			{
 				storage.Materials.Add( TerrainEdgeMaterials[m] );
 				idx = storage.Materials.Count - 1;
+				materialsAdded = true;
 			}
+
+			if ( idx > 31 )
+			{
+				Log.Error( $"RoadTool: Terrain has too many materials ({idx}). Material '{TerrainEdgeMaterials[m].ResourceName}' cannot be painted." );
+				idx = 0;
+			}
+
 			materialIndices[m] = idx;
+		}
+
+		if ( materialsAdded )
+		{
+			storage.StateHasChanged();
+			TerrainTarget.Create();
 		}
 
 		float boundSize = (Shape == IntersectionShape.Rectangle ? Math.Max( Width, Length ) * 0.5f : Radius) + TerrainEdgeRadius; // This line is unchanged 
@@ -253,6 +270,7 @@ public partial class RoadIntersectionComponent
 		if ( hasModified )
 		{
 			storage.ControlMap = controlMap;
+			storage.StateHasChanged();
 			TerrainTarget.SyncGPUTexture();
 		}
 	}

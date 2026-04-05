@@ -37,7 +37,7 @@ public partial class RoadComponent
 	public float TerrainTextureNoise { get; set; } = 0.2f;
 
 	[Property, Feature( "Terrain" ), Group( "Texture" )]
-	public TerrainMaterial[] TerrainEdgeMaterials { get; set; }
+	public TerrainMaterial[] TerrainEdgeMaterials { get; set; } = Array.Empty<TerrainMaterial>();
 
 	[Property, Feature( "Terrain" ), Group( "Texture" )]
 	public Gradient TerrainEdgeBlendGradient = new Gradient(
@@ -197,8 +197,8 @@ public partial class RoadComponent
 			}
 
 			storage.HeightMap = heightMap;
+			storage.StateHasChanged();
 			TerrainTarget.Create();
-			TerrainTarget.SyncGPUTexture();
 
 			Log.Info( "RoadTool: Terrain terraformed successfully!" );
 		}
@@ -212,7 +212,7 @@ public partial class RoadComponent
 		if ( !TerrainTarget.IsValid() || TerrainEdgeMaterials == null || TerrainEdgeMaterials.Length == 0 ) return;
 		
 		var storage = TerrainTarget.Storage;
-		if ( storage == null ) return;
+		if ( storage == null || storage.ControlMap == null ) return;
 
 		// 1. Setup Parameters
 		int resolution = storage.Resolution; 
@@ -223,16 +223,35 @@ public partial class RoadComponent
 		int sampleCount = Math.Max( 1, (int)MathF.Ceiling( Spline.Length / Math.Max( 5f, TerrainStepPrecision ) ) );
 
 		// Identify all material indices in the terrain storage 
+		bool materialsAdded = false;
 		var materialIndices = new int[TerrainEdgeMaterials.Length];
 		for ( int m = 0; m < TerrainEdgeMaterials.Length; m++ )
 		{
+			if ( TerrainEdgeMaterials[m] == null ) continue;
+
 			int idx = storage.Materials.IndexOf( TerrainEdgeMaterials[m] );
 			if ( idx == -1 )
 			{
 				storage.Materials.Add( TerrainEdgeMaterials[m] );
 				idx = storage.Materials.Count - 1;
+				materialsAdded = true;
 			}
+
+			// CompactTerrainMaterial only supports up to 32 materials (0-31)
+			if ( idx > 31 )
+			{
+				Log.Error( $"RoadTool: Terrain has too many materials ({idx}). Material '{TerrainEdgeMaterials[m].ResourceName}' cannot be painted." );
+				idx = 0; 
+			}
+
 			materialIndices[m] = idx;
+		}
+
+		if ( materialsAdded )
+		{
+			storage.StateHasChanged();
+			// We call Create to ensure the renderer knows about the new material resources
+			TerrainTarget.Create();
 		}
 
 		var frames = UseRotationMinimizingFrames ? CalculateRotationMinimizingTangentFrames( Spline, sampleCount + 1 ) : CalculateTangentFramesUsingUpDir( Spline, sampleCount + 1 );
@@ -328,6 +347,7 @@ public partial class RoadComponent
 		if ( hasModified )
 		{
 			storage.ControlMap = controlMap;
+			storage.StateHasChanged();
 			TerrainTarget.SyncGPUTexture();
 		}
 	}
