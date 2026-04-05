@@ -21,6 +21,22 @@ public partial class RoadComponent
 	[Property, Feature( "Terrain" ), Range( -10f, 10f )]
 	public float TerrainHeightOffset { get; set; } = 0f;
 
+	[Property, Feature( "Terrain" ), Group( "Texture" ), Range( 100f, 1000f )]
+	public float TerrainEdgeRadius { get; set; } = 500f;
+
+	[Property, Feature( "Terrain" ), Group( "Texture" ), Range( 0f, 1f )]
+	public float TerrainTextureNoise { get; set; } = 0.2f;
+
+	[Property, Feature( "Terrain" ), Group( "Texture" )]
+	public TerrainMaterial[] TerrainEdgeMaterials { get; set; }
+
+	[Property, Feature( "Terrain" ), Group( "Texture" )]
+	public Gradient TerrainEdgeBlendGradient = new Gradient(
+		new Gradient.ColorFrame( 0, Color.White ),
+		new Gradient.ColorFrame( 1, Color.White.WithAlpha( 0f ) )
+	);
+
+
 	/// <summary>
 	/// Adapts the terrain geometry to the spline shape.
 	/// </summary>
@@ -172,11 +188,137 @@ public partial class RoadComponent
 			}
 
 			storage.HeightMap = heightMap;
-			storage.StateHasChanged();
 			TerrainTarget.Create();
 			TerrainTarget.SyncGPUTexture();
 
 			Log.Info( "RoadTool: Terrain terraformed successfully!" );
+		}
+	}
+
+	/// <summary>
+	/// Applies the materials to the terrain based on the road shape and the blend gradient.
+	/// </summary>
+	public void PaintTerrainToRoad()
+	{
+		if ( !TerrainTarget.IsValid() || TerrainEdgeMaterials == null || TerrainEdgeMaterials.Length == 0 ) return;
+		
+		var storage = TerrainTarget.Storage;
+		if ( storage == null ) return;
+
+		// 1. Setup Parameters
+		int resolution = storage.Resolution;
+		float terrainSize = storage.TerrainSize;
+		float halfSize = terrainSize * 0.5f;
+		float roadWidthHalf = RoadWidth * 0.5f;
+		float totalRadius = roadWidthHalf + TerrainEdgeRadius;
+		int sampleCount = Math.Max( 1, (int)MathF.Ceiling( Spline.Length / Math.Max( 5f, TerrainStepPrecision ) ) );
+
+		// Identify all material indices in the terrain storage
+		var materialIndices = new int[TerrainEdgeMaterials.Length];
+		for ( int m = 0; m < TerrainEdgeMaterials.Length; m++ )
+		{
+			int idx = storage.Materials.IndexOf( TerrainEdgeMaterials[m] );
+			if ( idx == -1 )
+			{
+				storage.Materials.Add( TerrainEdgeMaterials[m] );
+				idx = storage.Materials.Count - 1;
+			}
+			materialIndices[m] = idx;
+		}
+
+		var frames = UseRotationMinimizingFrames ? CalculateRotationMinimizingTangentFrames( Spline, sampleCount + 1 ) : CalculateTangentFramesUsingUpDir( Spline, sampleCount + 1 );
+
+		// 2. Conversion des points de la spline en coordonnées locales au terrain (Z=0)
+		var localPoints = frames.Select( f => TerrainTarget.Transform.World.PointToLocal( WorldTransform.PointToWorld( f.Position ) ).WithZ( 0 ) ).ToArray();
+
+		// 3. Détermination du système de coordonnées (Centré vs Corner)
+		var checkPos = TerrainTarget.Transform.World.PointToLocal( WorldPosition );
+		bool localIsCentered = checkPos.x < 0f || checkPos.x > terrainSize || checkPos.y < 0f || checkPos.y > terrainSize;
+		float coordOffset = localIsCentered ? halfSize : 0f;
+
+		// 4. Définition de la zone de travail (BBox de la route + rayon d'effet)
+		BBox localSplineBounds = BBox.FromPoints( localPoints );
+		int ixMin = Math.Clamp( (int)MathF.Floor( (localSplineBounds.Mins.x + coordOffset - totalRadius) / terrainSize * (resolution - 1) ), 0, resolution - 1 );
+		int ixMax = Math.Clamp( (int)MathF.Ceiling( (localSplineBounds.Maxs.x + coordOffset + totalRadius) / terrainSize * (resolution - 1) ), 0, resolution - 1 );
+		int iyMin = Math.Clamp( (int)MathF.Floor( (localSplineBounds.Mins.y + coordOffset - totalRadius) / terrainSize * (resolution - 1) ), 0, resolution - 1 );
+		int iyMax = Math.Clamp( (int)MathF.Ceiling( (localSplineBounds.Maxs.y + coordOffset + totalRadius) / terrainSize * (resolution - 1) ), 0, resolution - 1 );
+
+		bool hasModified = false;
+		var controlMap = storage.ControlMap;
+
+		// 5. Parcours de la grille de pixels dans la zone de la route
+		for ( int ix = ixMin; ix <= ixMax; ix++ )
+		{
+			for ( int iy = iyMin; iy <= iyMax; iy++ )
+			{
+				float px = (ix / (float)(resolution - 1)) * terrainSize - coordOffset;
+				float py = (iy / (float)(resolution - 1)) * terrainSize - coordOffset;
+				Vector3 pixelPos = new Vector3( px, py, 0 );
+
+				// Trouver la distance la plus courte entre ce pixel et n'importe quel segment de la spline
+				float minDist = float.MaxValue;
+				for ( int s = 0; s < localPoints.Length - 1; s++ )
+				{
+					Vector3 pA = localPoints[s];
+					Vector3 pB = localPoints[s + 1];
+					
+					Vector3 ab = pB - pA;
+					Vector3 ap = pixelPos - pA;
+					float t_seg = Math.Clamp( Vector3.Dot( ap, ab ) / ab.LengthSquared, 0f, 1f );
+					float d = Vector3.DistanceBetween( pixelPos, pA + t_seg * ab );
+					
+					if ( d < minDist ) minDist = d;
+				}
+
+				if ( minDist > totalRadius ) continue;
+
+				int index = iy * resolution + ix;
+				float t = Math.Clamp( (minDist - roadWidthHalf) / TerrainEdgeRadius, 0f, 1f );
+				if ( minDist <= roadWidthHalf ) t = 0f;
+
+				float blendStrength = TerrainEdgeBlendGradient.Evaluate( t ).a;
+
+				if ( blendStrength > 0.01f )
+				{
+					float pixelNoise = ((float)((index * 1103515245 + 12345) & 0x7FFFFFFF) / 0x7FFFFFFF) * TerrainTextureNoise - (TerrainTextureNoise * 0.5f);
+					float noisyT = Math.Clamp( t + pixelNoise, 0f, 1f );
+					float noisyDistance = minDist + (pixelNoise * TerrainEdgeRadius);
+
+					int materialIndex;
+					if ( noisyDistance <= roadWidthHalf )
+					{
+						materialIndex = materialIndices[0];
+					}
+					else
+					{
+						int edgeMatCount = materialIndices.Length - 1;
+						int edgeIdx = edgeMatCount > 0 ? Math.Clamp( (int)(noisyT * edgeMatCount), 0, edgeMatCount - 1 ) + 1 : 0;
+						materialIndex = materialIndices[edgeIdx];
+					}
+
+					uint packed = controlMap[index];
+					var mat = new CompactTerrainMaterial( packed );
+
+					if ( mat.BaseTextureId == (byte)materialIndex )
+					{
+						mat.BlendFactor = (byte)MathX.Lerp( mat.BlendFactor, 0, blendStrength );
+					}
+					else
+					{
+						mat.OverlayTextureId = (byte)materialIndex;
+						mat.BlendFactor = (byte)MathX.Lerp( mat.BlendFactor, 255, blendStrength );
+					}
+
+					controlMap[index] = mat.Packed;
+					hasModified = true;
+				}
+			}
+		}
+
+		if ( hasModified )
+		{
+			storage.ControlMap = controlMap;
+			TerrainTarget.SyncGPUTexture();
 		}
 	}
 }

@@ -31,42 +31,36 @@ public class TerrainEditorTool : EditorTool
             targetComponent = go.Components.Get<RoadComponent>() ?? (Component)go.Components.Get<RoadIntersectionComponent>();
         }
 
-        Layout group = sidebar.AddGroup( "Properties" );
-
         if ( targetComponent.IsValid() )
         {
             var serialized = targetComponent.GetSerialized();
-            // StepPrecision isn't used for intersections, so we filter it out if needed
-            var targetProperties = targetComponent is RoadComponent
+
+            Layout propertiesGroup = sidebar.AddGroup( "Properties" );
+            var varProperties = targetComponent is RoadComponent
                 ? new[] { "TerrainFalloffRadius", "TerrainStepPrecision", "TerrainHeightOffset" }
                 : new[] { "TerrainFalloffRadius", "TerrainHeightOffset" };
 
-            foreach ( var propName in targetProperties )
+
+            foreach ( var propName in varProperties )
             {
-                var prop = serialized.GetProperty( propName );
-                if ( prop == null ) continue;
-
-                // Create a vertical container to stack the label and the slider
-                var propLayout = group.AddColumn();
-                propLayout.Spacing = 2;
-                propLayout.Margin = new Sandbox.UI.Margin( 0, 4, 0, 4 );
-
-                // Use ControlSheet.CreateLabel to maintain style and functionality (drag & drop)
-                propLayout.Add( ControlSheet.CreateLabel( prop ) );
-
-                // Generate the control widget (which will be a Slider thanks to the [Range] attribute)
-                // By placing it in a column, it will take the full available width
-                propLayout.Add( ControlWidget.Create( prop ) );
+                AddPropertyControl( propertiesGroup, serialized.GetProperty( propName ) );
             }
+            propertiesGroup.Add( new Button( "Apply to the Ground", "landscape" ) { Clicked = AlignTerrainToRoad } );
+
+            Layout texGroup = sidebar.AddGroup( "Texture" );
+            var texProperties = new[] { "TerrainEdgeRadius", "TerrainTextureNoise", "TerrainEdgeMaterials", "TerrainEdgeBlendGradient" };
+
+            foreach ( var propName in texProperties )
+            {
+                AddPropertyControl( texGroup, serialized.GetProperty( propName ) );
+            }
+            texGroup.Add( new Button( "Apply Materials", "palette" ) { Clicked = PaintRoadMaterials } );
         }
         else
         {
-            group.Add( new Label( "Select a route to edit" ) );
+            Layout componente = sidebar.AddGroup( "Componentes" );
+            componente.Add( new Label( "Select a route to edit" ) );
         }
-
-        // Add button outside the group (just below)
-        var buttonLayout = BuildControlButtons();
-        sidebar.Layout.Add( buttonLayout );
 
         // Flexible space to push everything to the top
         sidebar.Layout.AddStretchCell();
@@ -74,12 +68,15 @@ public class TerrainEditorTool : EditorTool
         return sidebar;
     }
 
-    private Layout BuildControlButtons()
+    private void AddPropertyControl( Layout layout, SerializedProperty prop )
     {
-        var row = Layout.Row();
-        row.Margin = new Sandbox.UI.Margin( 0, 8, 0, 0 ); // Small space above the button
-        row.Add( new Button( "Apply to the Ground", "landscape" ) { Clicked = AlignTerrainToRoad } );
-        return row;
+        if ( prop == null ) return;
+
+        var propLayout = layout.AddColumn();
+        propLayout.Spacing = 2;
+        propLayout.Margin = new Sandbox.UI.Margin( 0, 4, 0, 4 );
+        propLayout.Add( ControlSheet.CreateLabel( prop ) );
+        propLayout.Add( ControlWidget.Create( prop ) );
     }
 
 
@@ -141,6 +138,53 @@ public class TerrainEditorTool : EditorTool
                 targetStorage.HeightMap = newHeightMap;
                 targetStorage.StateHasChanged();
                 targetTerrain.Create();
+                targetTerrain.SyncGPUTexture();
+            } );
+    }
+
+    public static void PaintRoadMaterials()
+    {
+        var selection = SceneEditorSession.Active.Selection.FirstOrDefault();
+        RoadComponent road = null;
+        RoadIntersectionComponent intersection = null;
+
+        if ( selection is RoadComponent r ) road = r;
+        else if ( selection is RoadIntersectionComponent i ) intersection = i;
+        else if ( selection is GameObject go )
+        {
+            road = go.Components.Get<RoadComponent>();
+            intersection = go.Components.Get<RoadIntersectionComponent>();
+        }
+
+        if ( road == null && intersection == null ) return;
+
+        var terrain = SceneEditorSession.Active.Scene.GetAllComponents<Terrain>().FirstOrDefault();
+        if ( terrain == null ) return;
+
+        var storage = terrain.Storage;
+        var oldControlMap = storage.ControlMap.ToArray();
+
+        if ( road.IsValid() ) road.PaintTerrainToRoad();
+        else if ( intersection.IsValid() ) intersection.PaintTerrainToIntersection();
+
+        var newControlMap = storage.ControlMap.ToArray();
+
+        var targetTerrain = terrain;
+        var targetStorage = storage;
+
+        SceneEditorSession.Active.AddUndo( "Paint Terrain Materials",
+            undo: () =>
+            {
+                if ( !targetTerrain.IsValid() ) return;
+                targetStorage.ControlMap = oldControlMap;
+                targetStorage.StateHasChanged();
+                targetTerrain.SyncGPUTexture();
+            },
+            redo: () =>
+            {
+                if ( !targetTerrain.IsValid() ) return;
+                targetStorage.ControlMap = newControlMap;
+                targetStorage.StateHasChanged();
                 targetTerrain.SyncGPUTexture();
             } );
     }

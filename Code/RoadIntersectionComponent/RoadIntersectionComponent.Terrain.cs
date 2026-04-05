@@ -18,6 +18,21 @@ public partial class RoadIntersectionComponent
 	[Property, Feature( "Terrain" ), Range( -10f, 10f )]
 	public float TerrainHeightOffset { get; set; } = 0f;
 
+	[Property, Feature( "Terrain" ), Group( "Texture" ), Range( 100f, 1000f )]
+	public float TerrainEdgeRadius { get; set; } = 500f;
+
+	[Property, Feature( "Terrain" ), Group( "Texture" ), Range( 0f, 1f )]
+	public float TerrainTextureNoise { get; set; } = 0.2f;
+
+	[Property, Feature( "Terrain" ), Group( "Texture" )]
+	public TerrainMaterial[] TerrainEdgeMaterials { get; set; }
+
+	[Property, Feature( "Terrain" ), Group( "Texture" )]
+	public Gradient TerrainEdgeBlendGradient = new Gradient(
+		new Gradient.ColorFrame( 0, Color.White ),
+		new Gradient.ColorFrame( 1, Color.White.WithAlpha( 0f ) )
+	);
+
 	public void AdaptTerrainToIntersection()
 	{
 		if ( !TerrainTarget.IsValid() )
@@ -130,8 +145,111 @@ public partial class RoadIntersectionComponent
 			}
 
 			storage.HeightMap = heightMap;
-			storage.StateHasChanged();
 			TerrainTarget.Create();
+			TerrainTarget.SyncGPUTexture();
+		}
+	}
+
+	public void PaintTerrainToIntersection()
+	{
+		if ( !TerrainTarget.IsValid() || TerrainEdgeMaterials == null || TerrainEdgeMaterials.Length == 0 ) return;
+
+		var storage = TerrainTarget.Storage;
+		if ( storage == null ) return;
+
+		int resolution = storage.Resolution;
+		float terrainSize = storage.TerrainSize;
+		float halfSize = terrainSize * 0.5f;
+
+		// Identify all material indices in the terrain storage
+		var materialIndices = new int[TerrainEdgeMaterials.Length];
+		for ( int m = 0; m < TerrainEdgeMaterials.Length; m++ )
+		{
+			int idx = storage.Materials.IndexOf( TerrainEdgeMaterials[m] );
+			if ( idx == -1 )
+			{
+				storage.Materials.Add( TerrainEdgeMaterials[m] );
+				idx = storage.Materials.Count - 1;
+			}
+			materialIndices[m] = idx;
+		}
+
+		float boundSize = (Shape == IntersectionShape.Rectangle ? Math.Max( Width, Length ) * 0.5f : Radius) + TerrainEdgeRadius; // This line is unchanged
+		BBox worldBounds = new BBox( WorldPosition - new Vector3( boundSize ), WorldPosition + new Vector3( boundSize ) ); // This line is unchanged
+
+		var controlMap = storage.ControlMap;
+		bool hasModified = false;
+
+		for ( int ix = 0; ix < resolution; ix++ )
+		{
+			for ( int iy = 0; iy < resolution; iy++ )
+			{
+				float nodeLocalX = (ix / (float)(resolution - 1)) * terrainSize;
+				float nodeLocalY = (iy / (float)(resolution - 1)) * terrainSize;
+
+				var checkPos = TerrainTarget.Transform.World.PointToLocal( WorldPosition );
+				if ( checkPos.x < 0f || checkPos.x > terrainSize || checkPos.y < 0f || checkPos.y > terrainSize )
+				{
+					nodeLocalX -= halfSize;
+					nodeLocalY -= halfSize;
+				}
+
+				Vector3 pixelWorldPos = TerrainTarget.Transform.World.PointToWorld( new Vector3( nodeLocalX, nodeLocalY, 0 ) );
+				if ( !worldBounds.Contains( pixelWorldPos ) ) continue;
+
+				Vector3 relativePos = WorldTransform.PointToLocal( pixelWorldPos );
+				float distance = GetDistanceToIntersectionShape( relativePos.WithZ( 0 ) );
+
+				if ( distance > TerrainEdgeRadius ) continue;
+
+				int index = iy * resolution + ix;
+				float t = Math.Clamp( distance / TerrainEdgeRadius, 0f, 1f );
+				float blendStrength = TerrainEdgeBlendGradient.Evaluate( t ).a;
+
+				if ( blendStrength > 0.01f )
+				{
+					// Ajout d'un bruit déterministe pour entremêler les textures (Dithering)
+					float pixelNoise = ((float)((index * 1103515245 + 12345) & 0x7FFFFFFF) / 0x7FFFFFFF) * TerrainTextureNoise - (TerrainTextureNoise * 0.5f);
+					float noisyT = Math.Clamp( t + pixelNoise, 0f, 1f );
+					float noisyDistance = distance + (pixelNoise * TerrainEdgeRadius);
+
+					int materialIndex;
+					if ( noisyDistance <= 0 )
+					{
+						materialIndex = materialIndices[0];
+					}
+					else
+					{
+						int edgeMatCount = materialIndices.Length - 1;
+						// Utilisation de noisyT pour le choix de l'index
+						int edgeIdx = edgeMatCount > 0 ? Math.Clamp( (int)(noisyT * edgeMatCount), 0, edgeMatCount - 1 ) + 1 : 0;
+						materialIndex = materialIndices[edgeIdx];
+					}
+
+					uint packed = controlMap[index];
+					var mat = new CompactTerrainMaterial( packed );
+
+					// Si notre texture de route est déjà en base, on réduit le BlendFactor pour la révéler
+					if ( mat.BaseTextureId == (byte)materialIndex )
+					{
+						mat.BlendFactor = (byte)MathX.Lerp( mat.BlendFactor, 0, blendStrength );
+					}
+					else
+					{
+						// Sinon, on la place en Overlay et on augmente le BlendFactor pour l'afficher
+						mat.OverlayTextureId = (byte)materialIndex;
+						mat.BlendFactor = (byte)MathX.Lerp( mat.BlendFactor, 255, blendStrength );
+					}
+
+					controlMap[index] = mat.Packed;
+					hasModified = true;
+				}
+			}
+		}
+
+		if ( hasModified )
+		{
+			storage.ControlMap = controlMap;
 			TerrainTarget.SyncGPUTexture();
 		}
 	}

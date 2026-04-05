@@ -32,6 +32,15 @@ https://github.com/user-attachments/assets/5bdcd072-2cb1-48eb-b8d4-83d65eb1ebce
 - Lampposts auto generated along the road
 <img width="732" height="371" alt="Lampposts" src="https://i.imgur.com/MljcqXP.png" />
 
+- Road surface physics
+<img width="439" height="193" alt="Lampposts" src="https://i.imgur.com/ypxjlfu.png" />
+
+- Road terrain
+<img width="443" height="433" alt="Lampposts" src="https://i.imgur.com/vRK4l0r.png" />
+
+- Road terrain sidebare
+<img width="283" height="689" alt="Lampposts" src="https://i.imgur.com/vOIiVzb.png" />
+
 # 📀Setup
 
 ## Road texture
