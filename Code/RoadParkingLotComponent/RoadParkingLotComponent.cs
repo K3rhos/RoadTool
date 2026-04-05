@@ -120,7 +120,7 @@ public partial class RoadParkingLotComponent : Component, Component.ExecuteInEdi
 		// If we're in play mode, do not build (Since they're already saved in the scene file)
 		if (LoadingScreen.IsVisible || Game.IsPlaying)
 			return;
-		
+
 		if (!SpotPrefab.IsValid())
 			return;
 
@@ -157,7 +157,7 @@ public partial class RoadParkingLotComponent : Component, Component.ExecuteInEdi
 		// If we're in play mode, do not remove (Since they're already saved in the scene file)
 		if (LoadingScreen.IsVisible || Game.IsPlaying)
 			return;
-		
+
 		GameObject containerObject = GameObject.Children.FirstOrDefault(x => x.Name == "ParkingSpots");
 
 		if (!containerObject.IsValid())

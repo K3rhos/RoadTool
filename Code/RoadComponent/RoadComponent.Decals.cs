@@ -7,7 +7,7 @@ namespace RedSnail.RoadTool;
 public partial class RoadComponent
 {
 	private bool m_DoesDecalsNeedsRebuild = false;
-	
+
 	[Property, FeatureEnabled("Decals", Icon = "layers", Tint = EditorTint.Pink), Change] private bool HasDecals { get; set; } = false;
 	[Property, Feature("Decals")] public DecalDefinition[] DecalDefinitions { get; set; }
 	[Property, Feature("Decals"), Range(0.1f, 20f)] private float DecalSpacing { get; set { field = value; m_DoesDecalsNeedsRebuild = true; } } = 4.0f;
@@ -17,9 +17,9 @@ public partial class RoadComponent
 	[Property, Feature("Decals")] private ParticleFloat DecalSize { get; set { field = value; m_DoesDecalsNeedsRebuild = true; } } = new ParticleFloat(1.0f, 3.0f);
 	[Property, Feature("Decals")] private ParticleFloat DecalRotation { get; set { field = value; m_DoesDecalsNeedsRebuild = true; } } = new ParticleFloat(0.0f, 360.0f);
 	[Property, Feature("Decals")] private int Seed { get; set { field = value; m_DoesDecalsNeedsRebuild = true; } } = 0;
-	
-	
-	
+
+
+
 	private void OnHasDecalsChanged(bool _OldValue, bool _NewValue)
 	{
 		m_DoesDecalsNeedsRebuild = true;
@@ -42,7 +42,7 @@ public partial class RoadComponent
 	private void RemoveDecals()
 	{
 		GameObject containerObject = GameObject.Children.FirstOrDefault(x => x.Name == "Decals");
-		
+
 		if (containerObject.IsValid())
 		{
 			containerObject.Destroy();
@@ -66,10 +66,10 @@ public partial class RoadComponent
 	private void BuildDecals()
 	{
 		Game.SetRandomSeed(Seed);
-		
+
 		GameObject containerObject = new GameObject(GameObject, true, "Decals");
 		containerObject.Flags |= GameObjectFlags.NotSaved;
-		
+
 		float splineLength = Spline.Length;
 
 		int sampleCount = Math.Max(2, (int)MathF.Ceiling(splineLength / DecalSpacing));
@@ -105,9 +105,9 @@ public partial class RoadComponent
 			LocalPosition = _Position,
 			LocalRotation = _Rotation
 		};
-		
+
 		gameObject.Flags |= GameObjectFlags.NotSaved;
-		
+
 		Decal decal = gameObject.AddComponent<Decal>();
 
 		DecalDefinition decalDefinition = DecalDefinitions[Game.Random.Next(0, DecalDefinitions.Length)];

@@ -96,7 +96,7 @@ public partial class RoadIntersectionComponent
 
 		GameObject containerObject = new GameObject(GameObject, true, "TrafficLights");
 		containerObject.Flags |= GameObjectFlags.NotSaved;
-		
+
 		Vector3 up = WorldRotation.Up;
 		float sidewalkOffset = SidewalkWidth;
 
@@ -154,7 +154,7 @@ public partial class RoadIntersectionComponent
 			return;
 
 		trafficLightObject.BreakFromPrefab();
-		
+
 		trafficLightObject.Flags |= GameObjectFlags.NotSaved;
 		trafficLightObject.LocalPosition = _Position;
 		trafficLightObject.LocalRotation = _Rotation;

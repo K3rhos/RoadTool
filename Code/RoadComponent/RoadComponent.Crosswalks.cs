@@ -69,7 +69,7 @@ public partial class RoadComponent
 	{
 		GameObject containerObject = new GameObject(GameObject, true, "Crosswalks");
 		containerObject.Flags |= GameObjectFlags.NotSaved;
-		
+
 		float splineLength = Spline.Length;
 
 		int sampleCount = Math.Max(2, (int)MathF.Ceiling(splineLength / DecalSpacing));
@@ -110,7 +110,7 @@ public partial class RoadComponent
 		};
 
 		gameObject.Flags |= GameObjectFlags.NotSaved;
-		
+
 		Decal decal = gameObject.AddComponent<Decal>();
 
 		decal.Decals = [CrosswalkDefinition];

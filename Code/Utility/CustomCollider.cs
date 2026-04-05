@@ -43,7 +43,7 @@ public sealed class CustomCollider : Collider
 		PhysicsShape physicsShape = physicsBody.AddMeshShape(m_Vertices, m_Indices);
 
 		// Add Surface physics body
-		if ( m_CustomSurface != null )
+		if (m_CustomSurface != null)
 		{
 			physicsShape.Surface = m_CustomSurface;
 		}
@@ -67,7 +67,7 @@ public sealed class CustomCollider : Collider
 
 
 
-	public void SetMeshShape(List<Vector3> _Vertices, List<int> _Indices, Surface _Surface = null )
+	public void SetMeshShape(List<Vector3> _Vertices, List<int> _Indices, Surface _Surface = null)
 	{
 		m_Vertices = _Vertices;
 		m_Indices = _Indices;
