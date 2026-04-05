@@ -38,7 +38,7 @@ https://github.com/user-attachments/assets/5bdcd072-2cb1-48eb-b8d4-83d65eb1ebce
 - Road terrain
 <img width="443" height="433" alt="Lampposts" src="https://i.imgur.com/vRK4l0r.png" />
 
-- Road terrain sidebare
+- Road terrain sidebar
 <img width="283" height="689" alt="Lampposts" src="https://i.imgur.com/vOIiVzb.png" />
 
 # 📀Setup
