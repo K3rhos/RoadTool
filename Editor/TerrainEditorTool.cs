@@ -37,7 +37,7 @@ public class TerrainEditorTool : EditorTool
 
 			Layout propertiesGroup = sidebar.AddGroup("Properties");
 			var varProperties = targetComponent is RoadComponent
-				? new[] { "TerrainFalloffRadius", "TerrainStepPrecision", "TerrainHeightOffset" }
+				? new[] { "TerrainFalloffRadius", "TerrainStepPrecision", "TerrainHeightOffset", "TerrainRoadInset" }
 				: new[] { "TerrainFalloffRadius", "TerrainHeightOffset" };
 
 

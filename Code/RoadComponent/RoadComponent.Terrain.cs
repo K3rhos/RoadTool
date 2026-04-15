@@ -27,6 +27,9 @@ public partial class RoadComponent
 	[Property, Feature("Terrain"), Range(-10f, 10f)]
 	public float TerrainHeightOffset { get; set; } = 0f;
 
+	[Property, Feature("Terrain"), Range(0f, 100f)]
+	public float TerrainRoadInset { get; set; } = 10f;
+
 	[Property, Feature("Terrain"), Group("Texture"), Range(100f, 1000f)]
 	public float TerrainEdgeRadius { get; set; } = 500f;
 
@@ -44,6 +47,15 @@ public partial class RoadComponent
 		new Gradient.ColorFrame(0, Color.White),
 		new Gradient.ColorFrame(1, Color.White.WithAlpha(0f))
 	);
+
+	[Button( "Apply to the Ground" ), Feature( "Terrain" )]
+	private void ApplyTerrainToGround()
+	{
+		if ( !Scene.IsEditor )
+			return;
+
+		AdaptTerrainToRoad();
+	}
 
 
 	/// <summary> 
@@ -78,7 +90,10 @@ public partial class RoadComponent
 		float terrainMaxHeight = storage.TerrainHeight;
 		float halfSize = terrainSize * 0.5f;
 		float roadWidthHalf = RoadWidth * 0.5f;
-		float totalRadius = roadWidthHalf + TerrainFalloffRadius;
+		float sidewalkWidth = HasSidewalk ? SidewalkWidth : 0f;
+		float sidewalkTransitionRadius = roadWidthHalf + (sidewalkWidth * 0.5f);
+		float sidewalkOuterRadius = roadWidthHalf + sidewalkWidth;
+		float totalRadius = sidewalkOuterRadius + TerrainFalloffRadius;
 		int sampleCount = Math.Max(1, (int)MathF.Ceiling(Spline.Length / Math.Max(5f, TerrainStepPrecision)));
 
 		// 2. Initialization of calculation buffers
@@ -171,17 +186,25 @@ public partial class RoadComponent
 				float lateral = Vector2.Dot(nodeLocal2D, roadRight2D);
 				float rollHeightOffset = closestRoadRight.z * lateral;
 				float roadCoreHeight = Math.Clamp(closestLocalPos.z + TerrainHeightOffset + rollHeightOffset, 0f, terrainMaxHeight);
+				float roadUnderHeight = Math.Clamp(roadCoreHeight - TerrainRoadInset, 0f, terrainMaxHeight);
+				float originalHeight = (heightMap[index] / (float)ushort.MaxValue) * terrainMaxHeight;
 
 				float candidateHeight;
-				if (minDist <= roadWidthHalf)
+				if (minDist <= sidewalkTransitionRadius)
+				{
+					candidateHeight = roadUnderHeight;
+				}
+				else if (minDist <= sidewalkOuterRadius && sidewalkWidth > 0f)
 				{
 					candidateHeight = roadCoreHeight;
 				}
 				else
 				{
-					float t = Math.Clamp((minDist - roadWidthHalf) / TerrainFalloffRadius, 0f, 1f);
+					float transitionStart = sidewalkWidth > 0f ? sidewalkOuterRadius : roadWidthHalf;
+					float transitionBaseHeight = sidewalkWidth > 0f ? roadCoreHeight : roadUnderHeight;
+					float t = Math.Clamp((minDist - transitionStart) / TerrainFalloffRadius, 0f, 1f);
 					float smoothT = t * t * (3f - 2f * t);
-					candidateHeight = MathX.Lerp(roadCoreHeight, (heightMap[index] / (float)ushort.MaxValue) * terrainMaxHeight, smoothT);
+					candidateHeight = MathX.Lerp(transitionBaseHeight, originalHeight, smoothT);
 				}
 
 				if (minDist < bestDistance[index])
