@@ -261,4 +261,27 @@ public partial class RoadComponent
 
 		return _SimplifiedPositions[^1].frame;
 	}
+
+
+
+	private Transform[] CalculateAdaptiveFrames()
+	{
+		int baseSegmentCount = Math.Max(2, (int)Math.Ceiling(Spline.Length / RoadPrecision));
+		int frameCount = baseSegmentCount + 1;
+
+		var frames = UseRotationMinimizingFrames
+			? CalculateRotationMinimizingTangentFrames(Spline, frameCount)
+			: CalculateTangentFramesUsingUpDir(Spline, frameCount);
+
+		if (!AutoSimplify)
+			return frames;
+
+		var segmentsToKeep = DetectImportantSegments(frames, baseSegmentCount, MinSegmentsToMerge, StraightThreshold);
+		var simplifiedFrames = new Transform[segmentsToKeep.Count];
+
+		for (int i = 0; i < segmentsToKeep.Count; i++)
+			simplifiedFrames[i] = frames[segmentsToKeep[i]];
+
+		return simplifiedFrames;
+	}
 }
