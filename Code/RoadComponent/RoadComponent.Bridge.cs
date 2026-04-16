@@ -138,13 +138,18 @@ public partial class RoadComponent
 				float u0 = profileDistances[edgeIndex];
 				float u1 = profileDistances[edgeIndex + 1];
 
-				var face = polygonMesh.AddFace(vertices[currentIndex0], vertices[currentIndex1], vertices[nextIndex1], vertices[nextIndex0]);
-
-				if (!face.IsValid)
-					continue;
-
-				polygonMesh.SetFaceMaterial(face, _Material);
-				polygonMesh.SetFaceTextureCoords(face, new List<Vector2> { new(u0, v0), new(u0, v1), new(u1, v1), new(u1, v0) });
+				AddTexturedQuad(
+					polygonMesh,
+					_Material,
+					vertices[currentIndex0],
+					vertices[currentIndex1],
+					vertices[nextIndex1],
+					vertices[nextIndex0],
+					new Vector2(u0, v0),
+					new Vector2(u0, v1),
+					new Vector2(u1, v1),
+					new Vector2(u1, v0)
+				);
 			}
 
 			splineDistance += segmentTravel;
@@ -258,19 +263,18 @@ public partial class RoadComponent
 			float edgeLength = Vector3.DistanceBetween(topCorners[side], topCorners[next]) / _TextureRepeat;
 			float vLength = _Height / _TextureRepeat;
 
-			var face = _PolygonMesh.AddFace(vertices[side], vertices[side + 4], vertices[next + 4], vertices[next]);
-
-			if (!face.IsValid)
-				continue;
-
-			_PolygonMesh.SetFaceMaterial(face, _Material);
-			_PolygonMesh.SetFaceTextureCoords(face, new List<Vector2>
-			{
-				new(0, 0),
-				new(0, vLength),
-				new(edgeLength, vLength),
-				new(edgeLength, 0)
-			});
+			AddTexturedQuad(
+				_PolygonMesh,
+				_Material,
+				vertices[side],
+				vertices[side + 4],
+				vertices[next + 4],
+				vertices[next],
+				new Vector2(0, 0),
+				new Vector2(0, vLength),
+				new Vector2(edgeLength, vLength),
+				new Vector2(edgeLength, 0)
+			);
 		}
 	}
 
@@ -301,19 +305,18 @@ public partial class RoadComponent
 			float u1 = (circumference * (side + 1) / segmentCount) / _TextureRepeat;
 			float v1 = _Height / _TextureRepeat;
 
-			var face = _PolygonMesh.AddFace(vertices[side], vertices[side + segmentCount], vertices[next + segmentCount], vertices[next]);
-
-			if (!face.IsValid)
-				continue;
-
-			_PolygonMesh.SetFaceMaterial(face, _Material);
-			_PolygonMesh.SetFaceTextureCoords(face, new List<Vector2>
-			{
-				new(u0, 0),
-				new(u0, v1),
-				new(u1, v1),
-				new(u1, 0)
-			});
+			AddTexturedQuad(
+				_PolygonMesh,
+				_Material,
+				vertices[side],
+				vertices[side + segmentCount],
+				vertices[next + segmentCount],
+				vertices[next],
+				new Vector2(u0, 0),
+				new Vector2(u0, v1),
+				new Vector2(u1, v1),
+				new Vector2(u1, 0)
+			);
 		}
 	}
 
@@ -464,6 +467,22 @@ public partial class RoadComponent
 
 
 
+	private void EnsureBridgeMeshExist()
+	{
+		if (IsInPlayMode)
+			return;
+
+		if (IsLocked)
+			return;
+
+		if (HasGeneratedMeshChildren(BridgeTag))
+			return;
+
+		CreateBridge();
+	}
+
+
+
 	private void CreateBridge()
 	{
 		if (IsLocked)
@@ -477,7 +496,8 @@ public partial class RoadComponent
 		if (!HasBridge)
 			return;
 
-		var frames = CalculateAdaptiveFrames();
+		GetSplineFrameData(out var sampledFrames, out var segmentsToKeep);
+		var frames = segmentsToKeep.Select(index => sampledFrames[index]).ToArray();
 		int totalSegments = frames.Length - 1;
 
 		if (totalSegments <= 0)
@@ -504,9 +524,6 @@ public partial class RoadComponent
 		if (!Scene.IsEditor)
 			return;
 
-		var toRemove = GameObject.Children.Where(child => child.Tags.Has(BridgeTag)).ToList();
-
-		foreach (var child in toRemove)
-			child.Destroy();
+		RemoveGeneratedMeshChildren(BridgeTag);
 	}
 }

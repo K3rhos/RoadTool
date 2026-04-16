@@ -1,4 +1,3 @@
-using System;
 using System.Linq;
 using Sandbox;
 
@@ -70,13 +69,7 @@ public partial class RoadComponent
 		GameObject containerObject = new GameObject(GameObject, true, "Crosswalks");
 		containerObject.Flags |= GameObjectFlags.NotSaved;
 
-		float splineLength = Spline.Length;
-
-		int sampleCount = Math.Max(2, (int)MathF.Ceiling(splineLength / DecalSpacing));
-
-		var frames = UseRotationMinimizingFrames
-			? CalculateRotationMinimizingTangentFrames(Spline, sampleCount)
-			: CalculateTangentFramesUsingUpDir(Spline, sampleCount);
+		GetSplineFrameData(out var frames, out _, DecalSpacing);
 
 		if (CrosswalkConfig is CrosswalkConfig.Start or CrosswalkConfig.Both)
 		{

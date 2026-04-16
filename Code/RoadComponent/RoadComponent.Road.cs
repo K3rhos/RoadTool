@@ -1,11 +1,10 @@
-using System;
-using System.Collections.Generic;
 using Sandbox;
 
 namespace RedSnail.RoadTool;
 
 public partial class RoadComponent
 {
+	[Property(Title = "🔒 Locked"), Feature("Road")] private bool IsRoadLocked { get; set; } = false;
 	[Property(Title = "Material"), Feature("Road", Icon = "fork_left", Tint = EditorTint.Green)] private Material RoadMaterial { get; set { field = value; IsDirty = true; } }
 	[Property(Title = "Width"), Feature("Road"), Range(10.0f, 1000.0f)] public float RoadWidth { get; set { field = value; IsDirty = true; } } = 500.0f;
 	[Property(Title = "Precision"), Feature("Road"), Range(10.0f, 100.0f)] private float RoadPrecision { get; set { field = value.Clamp(1.0f, 10000.0f); IsDirty = true; } } = 40.0f;
@@ -13,46 +12,30 @@ public partial class RoadComponent
 
 
 
-	private void BuildRoad()
+	private void BuildRoadMesh()
 	{
-		int segmentCount = Math.Max(2, (int)Math.Ceiling(Spline.Length / RoadPrecision));
-		int frameCount = segmentCount + 1;
+		GetSplineFrameData(out var frames, out var segmentsToKeep);
 
-		var frames = UseRotationMinimizingFrames
-		   ? CalculateRotationMinimizingTangentFrames(Spline, frameCount)
-		   : CalculateTangentFramesUsingUpDir(Spline, frameCount);
+		if (segmentsToKeep.Count < 2)
+			return;
 
-		var segmentsToKeep = new List<int>();
-
-		if (AutoSimplify)
-		{
-			segmentsToKeep = DetectImportantSegments(frames, segmentCount, MinSegmentsToMerge, StraightThreshold);
-		}
-		else
-		{
-			for (int i = 0; i <= segmentCount; i++)
-			{
-				segmentsToKeep.Add(i);
-			}
-		}
-
-		const int vertsPerSegment = 4;
-		const int indicesPerSegment = 6;
-
-		int finalSegmentCount = segmentsToKeep.Count - 1;
-
-		m_MeshBuilder.InitSubmesh
-		(
-			"road",
-			finalSegmentCount * vertsPerSegment,
-			finalSegmentCount * indicesPerSegment,
-			RoadMaterial ?? Material.Load("materials/dev/reflectivity_30.vmat"),
-			_HasCollision: true
-		);
-
+		var polygonMesh = new PolygonMesh();
+		var material = RoadMaterial ?? Material.Load("materials/dev/reflectivity_30.vmat");
 		float halfWidth = RoadWidth * 0.5f;
+		var frameVertices = new HalfEdgeMesh.VertexHandle[segmentsToKeep.Count][];
 
-		for (int i = 0; i < finalSegmentCount; i++)
+		for (int i = 0; i < segmentsToKeep.Count; i++)
+		{
+			Transform frame = frames[segmentsToKeep[i]];
+			Vector3 p = frame.Position;
+			Vector3 right = frame.Rotation.Right;
+			Vector3 l = p - right * halfWidth;
+			Vector3 r = p + right * halfWidth;
+
+			frameVertices[i] = polygonMesh.AddVertices(l, r);
+		}
+
+		for (int i = 0; i < segmentsToKeep.Count - 1; i++)
 		{
 			int idx0 = segmentsToKeep[i];
 			int idx1 = segmentsToKeep[i + 1];
@@ -63,17 +46,11 @@ public partial class RoadComponent
 			Vector3 p0 = f0.Position;
 			Vector3 p1 = f1.Position;
 
-			Vector3 forward = (p1 - p0).Normal;
-
 			Vector3 right0 = f0.Rotation.Right;
 			Vector3 right1 = f1.Rotation.Right;
 
-			Vector3 up0 = f0.Rotation.Up;
-			Vector3 up1 = f1.Rotation.Up;
-
 			Vector3 l0 = p0 - right0 * halfWidth;
 			Vector3 r0 = p0 + right0 * halfWidth;
-
 			Vector3 l1 = p1 - right1 * halfWidth;
 			Vector3 r1 = p1 + right1 * halfWidth;
 
@@ -82,12 +59,38 @@ public partial class RoadComponent
 			Vector2 uv11 = new Vector2(r1.x, r1.y) / RoadTextureInchesPerRepeat;
 			Vector2 uv01 = new Vector2(l1.x, l1.y) / RoadTextureInchesPerRepeat;
 
-			m_MeshBuilder.AddQuad("road",
-				l0, r0, r1, l1,
-				up0, up1, up1, up0,
-				forward,
-				uv00, uv10, uv11, uv01
-			);
+			AddTexturedQuad(polygonMesh, material, frameVertices[i][0], frameVertices[i][1], frameVertices[i + 1][1], frameVertices[i + 1][0], uv00, uv10, uv11, uv01);
 		}
+
+		CreateRoadMeshComponent(polygonMesh);
+	}
+
+
+
+	private void CreateRoadMeshComponent(PolygonMesh _PolygonMesh)
+	{
+		var child = new GameObject(GameObject, true, "Road");
+		child.Tags.Add(RoadMeshTag);
+		child.Tags.Add(RoadSurfaceTag);
+
+		var meshComponent = child.AddComponent<MeshComponent>();
+		meshComponent.Mesh = _PolygonMesh;
+		meshComponent.SmoothingAngle = 40.0f;
+	}
+
+
+
+	private void EnsureRoadMeshExist()
+	{
+		if (IsInPlayMode)
+			return;
+
+		if (IsRoadLocked)
+			return;
+
+		if (HasGeneratedMeshChildren(RoadSurfaceTag))
+			return;
+
+		BuildRoadMesh();
 	}
 }

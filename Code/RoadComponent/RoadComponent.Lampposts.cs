@@ -52,8 +52,7 @@ public partial class RoadComponent
 
 	private void RemoveLampposts()
 	{
-		// If we're in play mode, do not remove (Since they're already saved in the scene file)
-		if (LoadingScreen.IsVisible || Game.IsPlaying)
+		if (IsInPlayMode)
 			return;
 
 		GameObject containerObject = GameObject.Children.FirstOrDefault(x => x.Name == "Lampposts");
@@ -80,11 +79,11 @@ public partial class RoadComponent
 
 	private void BuildLampposts()
 	{
-		// If we're in play mode, do not build (Since they're already saved in the scene file)
-		if (LoadingScreen.IsVisible || Game.IsPlaying)
+		if (IsInPlayMode)
 			return;
 
 		GameObject containerObject = new GameObject(GameObject, true, "Lampposts");
+		containerObject.Tags.Add("road_props");
 
 		float splineLength = Spline.Length;
 		float effectiveLength = splineLength - StartOffset - EndOffset;
@@ -92,33 +91,13 @@ public partial class RoadComponent
 		if (effectiveLength <= 0)
 			return;
 
-		// Calculate base segments using the same logic as road/sidewalk
-		int baseSegmentCount = Math.Max(2, (int)Math.Ceiling(Spline.Length / RoadPrecision));
-		int baseFrameCount = baseSegmentCount + 1;
-
-		var frames = UseRotationMinimizingFrames
-			? CalculateRotationMinimizingTangentFrames(Spline, baseFrameCount)
-			: CalculateTangentFramesUsingUpDir(Spline, baseFrameCount);
-
-		var segmentsToKeep = new List<int>();
-
-		if (AutoSimplify)
-		{
-			segmentsToKeep = DetectImportantSegments(frames, baseSegmentCount, MinSegmentsToMerge, StraightThreshold);
-		}
-		else
-		{
-			for (int i = 0; i <= baseSegmentCount; i++)
-			{
-				segmentsToKeep.Add(i);
-			}
-		}
+		GetSplineFrameData(out var frames, out var segmentsToKeep);
 
 		var simplifiedPositions = new List<(Transform _Frame, float _Distance)>();
 
 		foreach (int index in segmentsToKeep)
 		{
-			float t = (float)index / (baseFrameCount - 1);
+			float t = (float)index / (frames.Length - 1);
 			float distance = t * splineLength;
 
 			simplifiedPositions.Add((frames[index], distance));

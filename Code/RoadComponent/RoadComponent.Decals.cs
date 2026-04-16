@@ -70,13 +70,7 @@ public partial class RoadComponent
 		GameObject containerObject = new GameObject(GameObject, true, "Decals");
 		containerObject.Flags |= GameObjectFlags.NotSaved;
 
-		float splineLength = Spline.Length;
-
-		int sampleCount = Math.Max(2, (int)MathF.Ceiling(splineLength / DecalSpacing));
-
-		var frames = UseRotationMinimizingFrames
-			? CalculateRotationMinimizingTangentFrames(Spline, sampleCount)
-			: CalculateTangentFramesUsingUpDir(Spline, sampleCount);
+		GetSplineFrameData(out var frames, out _, DecalSpacing);
 
 		float halfRoadWidth = RoadWidth * 0.5f;
 

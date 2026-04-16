@@ -8,6 +8,11 @@ namespace RedSnail.RoadTool;
 
 public partial class RoadComponent
 {
+	// Game.IsPlaying is broken right now on S&box, using LoadingScreen.IsVisible is a good alternative to tell if we're playing the game bcs this one is true when stuff init for the first time
+	public bool IsInPlayMode => LoadingScreen.IsVisible || Game.IsPlaying;
+
+
+
 	private static Vector3 ParallelTransport(Vector3 _Up, Vector3 _PreviousTangent, Vector3 _CurrentTangent)
 	{
 		Vector3 rotationAxis = Vector3.Cross(_PreviousTangent, _CurrentTangent);
@@ -264,24 +269,38 @@ public partial class RoadComponent
 
 
 
-	private Transform[] CalculateAdaptiveFrames()
+	private static void AddTexturedQuad(PolygonMesh _PolygonMesh, Material _Material, HalfEdgeMesh.VertexHandle _A, HalfEdgeMesh.VertexHandle _B, HalfEdgeMesh.VertexHandle _C, HalfEdgeMesh.VertexHandle _D, Vector2 _UvA, Vector2 _UvB, Vector2 _UvC, Vector2 _UvD)
 	{
-		int baseSegmentCount = Math.Max(2, (int)Math.Ceiling(Spline.Length / RoadPrecision));
-		int frameCount = baseSegmentCount + 1;
+		var face = _PolygonMesh.AddFace(_A, _B, _C, _D);
 
-		var frames = UseRotationMinimizingFrames
+		if (!face.IsValid)
+			return;
+
+		_PolygonMesh.SetFaceMaterial(face, _Material);
+		_PolygonMesh.SetFaceTextureCoords(face, new List<Vector2> { _UvA, _UvB, _UvC, _UvD });
+	}
+
+
+
+	private void GetSplineFrameData(out Transform[] _Frames, out List<int> _SegmentsToKeep, float? _PrecisionOverride = null)
+	{
+		float precision = _PrecisionOverride ?? RoadPrecision;
+		int segmentCount = Math.Max(2, (int)Math.Ceiling(Spline.Length / precision));
+		int frameCount = segmentCount + 1;
+
+		_Frames = UseRotationMinimizingFrames
 			? CalculateRotationMinimizingTangentFrames(Spline, frameCount)
 			: CalculateTangentFramesUsingUpDir(Spline, frameCount);
 
-		if (!AutoSimplify)
-			return frames;
+		_SegmentsToKeep = new List<int>();
 
-		var segmentsToKeep = DetectImportantSegments(frames, baseSegmentCount, MinSegmentsToMerge, StraightThreshold);
-		var simplifiedFrames = new Transform[segmentsToKeep.Count];
+		if (AutoSimplify)
+		{
+			_SegmentsToKeep = DetectImportantSegments(_Frames, segmentCount, MinSegmentsToMerge, StraightThreshold);
+			return;
+		}
 
-		for (int i = 0; i < segmentsToKeep.Count; i++)
-			simplifiedFrames[i] = frames[segmentsToKeep[i]];
-
-		return simplifiedFrames;
+		for (int i = 0; i <= segmentCount; i++)
+			_SegmentsToKeep.Add(i);
 	}
 }

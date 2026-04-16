@@ -1,4 +1,5 @@
-﻿using Sandbox;
+using System.Linq;
+using Sandbox;
 
 namespace RedSnail.RoadTool;
 
@@ -11,7 +12,11 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 	[Property, Feature("General"), Hide]
 	public Spline Spline = new();
 
-	private MeshBuilder m_MeshBuilder;
+	private bool m_DoesRoadMeshNeedRebuild;
+
+	private const string RoadMeshTag = "road_mesh";
+	private const string RoadSurfaceTag = "road_surface";
+	private const string SidewalkSurfaceTag = "road_sidewalk";
 
 	[Property, Feature("General", Icon = "public", Tint = EditorTint.White), Category("Optimization")] private bool AutoSimplify { get; set { field = value; IsDirty = true; } } = false;
 	[Property, Feature("General"), Category("Optimization"), Range(0.1f, 10.0f)] private float StraightThreshold { get; set { field = value; IsDirty = true; } } = 1.0f; // Degrees - how straight before merging
@@ -26,7 +31,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 		{
 			field = value;
 
-			m_MeshBuilder?.IsDirty = value;
+			m_DoesRoadMeshNeedRebuild = value;
 			m_LinesBuilder?.IsDirty = value;
 			m_DoesLamppostsNeedRebuild = value;
 		}
@@ -49,12 +54,14 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 	{
 		Spline.SplineChanged += UpdateData;
 
-		CreateMeshBuilder();
+		EnsureRoadMeshExist();
+		EnsureSidewalkMeshExist();
+		EnsureBridgeMeshExist();
+
 		CreateLines();
 		CreateDecals();
 		CreateLampposts();
 		CreateCrosswalks();
-		CreateBridge();
 	}
 
 
@@ -63,7 +70,8 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 	{
 		Spline.SplineChanged -= UpdateData;
 
-		RemoveMeshBuilder();
+		RemoveRoadMesh();
+		RemoveSidewalkMesh();
 		RemoveLines();
 		RemoveDecals();
 		RemoveLampposts();
@@ -75,7 +83,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 
 	protected override void OnUpdate()
 	{
-		UpdateMeshBuilder();
+		UpdateRoadMeshes();
 		UpdateLines();
 		UpdateDecals();
 		UpdateLampposts();
@@ -85,42 +93,80 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 
 
 
-	protected override void OnValidate()
+	private void UpdateRoadMeshes()
 	{
-		UpdateData();
+		if (!m_DoesRoadMeshNeedRebuild)
+			return;
+
+		RebuildRoadMesh();
+		RebuildSidewalkMesh();
+
+		m_DoesRoadMeshNeedRebuild = false;
 	}
 
 
 
-	private void CreateMeshBuilder()
+	private void RebuildRoadMesh()
 	{
-		m_MeshBuilder = new MeshBuilder(GameObject);
-		m_MeshBuilder.OnBuild += BuildAllMeshes;
-		m_MeshBuilder.PhysicsSurface = HasCustomPhysics ? RoadSurface : null;
-		m_MeshBuilder.Rebuild();
+		if (IsInPlayMode)
+			return;
+
+		if (IsRoadLocked)
+			return;
+
+		RemoveGeneratedMeshChildren(RoadSurfaceTag);
+		BuildRoadMesh();
 	}
 
 
 
-	private void UpdateMeshBuilder()
+	private void RebuildSidewalkMesh()
 	{
-		m_MeshBuilder?.Update();
+		if (IsInPlayMode)
+			return;
+
+		if (IsSidewalkLocked)
+			return;
+
+		RemoveGeneratedMeshChildren(SidewalkSurfaceTag);
+		BuildSidewalkMesh();
 	}
 
 
 
-	private void RemoveMeshBuilder()
+	private void RemoveRoadMesh()
 	{
-		m_MeshBuilder?.OnBuild -= BuildAllMeshes;
-		m_MeshBuilder?.Clear();
+		if (IsRoadLocked)
+			return;
+
+		RemoveGeneratedMeshChildren(RoadSurfaceTag);
 	}
 
 
 
-	private void BuildAllMeshes()
+	private void RemoveSidewalkMesh()
 	{
-		BuildRoad();
-		BuildSidewalk();
+		if (IsSidewalkLocked)
+			return;
+
+		RemoveGeneratedMeshChildren(SidewalkSurfaceTag);
+	}
+
+
+
+	private void RemoveGeneratedMeshChildren(string _Tag)
+	{
+		var toRemove = GameObject.Children.Where(child => child.Tags.Has(_Tag)).ToList();
+
+		foreach (var child in toRemove)
+			child.Destroy();
+	}
+
+
+
+	private bool HasGeneratedMeshChildren(string _Tag)
+	{
+		return GameObject.Children.Any(child => child.Tags.Has(_Tag));
 	}
 
 

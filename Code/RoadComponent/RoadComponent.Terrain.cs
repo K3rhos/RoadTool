@@ -12,10 +12,7 @@ public enum TerrainTextureLayer
 
 public partial class RoadComponent
 {
-	[Property, FeatureEnabled("Terrain", Icon = "landscape", Tint = EditorTint.Green)]
-	private bool HasTerrainModification { get; set; } = false;
-
-	[Property, Feature("Terrain"), Hide]
+	[Property, Feature("Terrain", Icon = "landscape", Tint = EditorTint.Green), Hide]
 	private Terrain TerrainTarget { get; set; }
 
 	[Property, Feature("Terrain"), Range(0f, 2000f)]
@@ -48,14 +45,17 @@ public partial class RoadComponent
 		new Gradient.ColorFrame(1, Color.White.WithAlpha(0f))
 	);
 
-	[Button( "Apply to the Ground" ), Feature( "Terrain" )]
+
+
+	[Button("Apply to the Ground"), Feature("Terrain")]
 	private void ApplyTerrainToGround()
 	{
-		if ( !Scene.IsEditor )
+		if (!Scene.IsEditor)
 			return;
 
 		AdaptTerrainToRoad();
 	}
+
 
 
 	/// <summary> 
@@ -84,7 +84,7 @@ public partial class RoadComponent
 			return;
 		}
 
-		// 1. Terrain and Road Parameters
+		// Terrain and Road Parameters
 		int resolution = storage.Resolution;
 		float terrainSize = storage.TerrainSize;
 		float terrainMaxHeight = storage.TerrainHeight;
@@ -94,9 +94,8 @@ public partial class RoadComponent
 		float sidewalkTransitionRadius = roadWidthHalf + (sidewalkWidth * 0.5f);
 		float sidewalkOuterRadius = roadWidthHalf + sidewalkWidth;
 		float totalRadius = sidewalkOuterRadius + TerrainFalloffRadius;
-		int sampleCount = Math.Max(1, (int)MathF.Ceiling(Spline.Length / Math.Max(5f, TerrainStepPrecision)));
 
-		// 2. Initialization of calculation buffers
+		// Initialization of calculation buffers
 		var heightMap = storage.HeightMap;
 		var updatedHeights = new float[heightMap.Length];
 		var bestDistance = new float[heightMap.Length];
@@ -106,14 +105,8 @@ public partial class RoadComponent
 			bestDistance[i] = float.MaxValue;
 		}
 
-		// 3. Spline Sampling — respect AutoSimplify to match the actual road geometry
-		var frames = UseRotationMinimizingFrames
-			? CalculateRotationMinimizingTangentFrames(Spline, sampleCount + 1)
-			: CalculateTangentFramesUsingUpDir(Spline, sampleCount + 1);
-
-		var usedIndices = AutoSimplify
-			? DetectImportantSegments(frames, sampleCount, MinSegmentsToMerge, StraightThreshold)
-			: System.Linq.Enumerable.Range(0, sampleCount + 1).ToList();
+		// Spline Sampling — respect AutoSimplify to match the actual road geometry
+		GetSplineFrameData(out var frames, out var usedIndices, Math.Max(5f, TerrainStepPrecision));
 
 		int segCount = usedIndices.Count;
 		var localPositions = new Vector3[segCount];
@@ -133,7 +126,7 @@ public partial class RoadComponent
 			roadRightLocals[i] = TerrainTarget.Transform.World.Rotation.Inverse * worldRight;
 		}
 
-		// 4. Working area bounding box (covers all segments + falloff)
+		// Working area bounding box (covers all segments + falloff)
 		var flatPoints = localPositions.Select(p => p.WithZ(0)).ToArray();
 		BBox localBounds = BBox.FromPoints(flatPoints);
 		int ixMin = Math.Clamp((int)MathF.Floor((localBounds.Mins.x + coordOffset - totalRadius) / terrainSize * (resolution - 1)), 0, resolution - 1);
@@ -143,8 +136,8 @@ public partial class RoadComponent
 
 		bool hasModified = false;
 
-		// 5. Segment-query approach: for each pixel find the closest point on any road segment.
-		//    This correctly handles AutoSimplify where frames can be far apart.
+		// Segment-query approach: for each pixel find the closest point on any road segment.
+		// This correctly handles AutoSimplify where frames can be far apart.
 		for (int ix = ixMin; ix <= ixMax; ix++)
 		{
 			for (int iy = iyMin; iy <= iyMax; iy++)
@@ -218,7 +211,7 @@ public partial class RoadComponent
 
 		if (hasModified)
 		{
-			// 6. Final encoding to ushort and GPU synchronization
+			// Final encoding to ushort and GPU synchronization
 			for (int i = 0; i < heightMap.Length; i++)
 			{
 				heightMap[i] = (ushort)MathF.Round(Math.Clamp(updatedHeights[i], 0f, terrainMaxHeight) / terrainMaxHeight * ushort.MaxValue);
@@ -232,6 +225,8 @@ public partial class RoadComponent
 		}
 	}
 
+
+
 	/// <summary>
 	/// Applies the materials to the terrain based on the road shape and the blend gradient.
 	/// </summary>
@@ -242,13 +237,12 @@ public partial class RoadComponent
 		var storage = TerrainTarget.Storage;
 		if (storage == null || storage.ControlMap == null) return;
 
-		// 1. Setup Parameters
+		// Setup Parameters
 		int resolution = storage.Resolution;
 		float terrainSize = storage.TerrainSize;
 		float halfSize = terrainSize * 0.5f;
 		float roadWidthHalf = RoadWidth * 0.5f;
 		float totalRadius = roadWidthHalf + TerrainEdgeRadius;
-		int sampleCount = Math.Max(1, (int)MathF.Ceiling(Spline.Length / Math.Max(5f, TerrainStepPrecision)));
 
 		// Identify all material indices in the terrain storage 
 		bool materialsAdded = false;
@@ -282,21 +276,18 @@ public partial class RoadComponent
 			TerrainTarget.Create();
 		}
 
-		var frames = UseRotationMinimizingFrames ? CalculateRotationMinimizingTangentFrames(Spline, sampleCount + 1) : CalculateTangentFramesUsingUpDir(Spline, sampleCount + 1);
+		GetSplineFrameData(out var frames, out var usedIndices, Math.Max(5f, TerrainStepPrecision));
+		var usedFrames = usedIndices.Select(i => frames[i]);
 
-		var usedFrames = AutoSimplify
-			? DetectImportantSegments(frames, sampleCount, MinSegmentsToMerge, StraightThreshold).Select(i => frames[i])
-			: frames;
-
-		// 2. Conversion of spline points to local terrain coordinates (Z=0)
+		// Conversion of spline points to local terrain coordinates (Z=0)
 		var localPoints = usedFrames.Select(f => TerrainTarget.Transform.World.PointToLocal(WorldTransform.PointToWorld(f.Position)).WithZ(0)).ToArray();
 
-		// 3. Coordinate system determination (Centered vs Corner) 
+		// Coordinate system determination (Centered vs Corner) 
 		var checkPos = TerrainTarget.Transform.World.PointToLocal(WorldPosition);
 		bool localIsCentered = checkPos.x < 0f || checkPos.x > terrainSize || checkPos.y < 0f || checkPos.y > terrainSize;
 		float coordOffset = localIsCentered ? halfSize : 0f;
 
-		// 4. Definition of the working area (Road BBox + effect radius) 
+		// Definition of the working area (Road BBox + effect radius) 
 		BBox localSplineBounds = BBox.FromPoints(localPoints);
 		int ixMin = Math.Clamp((int)MathF.Floor((localSplineBounds.Mins.x + coordOffset - totalRadius) / terrainSize * (resolution - 1)), 0, resolution - 1);
 		int ixMax = Math.Clamp((int)MathF.Ceiling((localSplineBounds.Maxs.x + coordOffset + totalRadius) / terrainSize * (resolution - 1)), 0, resolution - 1);
@@ -306,7 +297,7 @@ public partial class RoadComponent
 		bool hasModified = false;
 		var controlMap = storage.ControlMap;
 
-		// 5. Iterate over the pixel grid in the road area
+		// Iterate over the pixel grid in the road area
 		for (int ix = ixMin; ix <= ixMax; ix++)
 		{
 			for (int iy = iyMin; iy <= iyMax; iy++)

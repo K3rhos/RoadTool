@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Sandbox;
 
 namespace RedSnail.RoadTool;
@@ -55,33 +54,7 @@ public partial class RoadComponent
 		if (!HasLines || LineDefinitions == null || LineDefinitions.Length == 0)
 			return;
 
-		float splineLength = Spline.Length;
-
-		int baseSegmentCount = Math.Max(2, (int)Math.Ceiling(splineLength / RoadPrecision));
-		int frameCount = baseSegmentCount + 1;
-
-		var frames = UseRotationMinimizingFrames
-			? CalculateRotationMinimizingTangentFrames(Spline, frameCount)
-			: CalculateTangentFramesUsingUpDir(Spline, frameCount);
-
-		var segmentsToKeep = new List<int>();
-
-		if (AutoSimplify)
-		{
-			segmentsToKeep = DetectImportantSegments(
-				frames,
-				baseSegmentCount,
-				MinSegmentsToMerge,
-				StraightThreshold
-			);
-		}
-		else
-		{
-			for (int i = 0; i <= baseSegmentCount; i++)
-			{
-				segmentsToKeep.Add(i);
-			}
-		}
+		GetSplineFrameData(out var frames, out var segmentsToKeep);
 
 		int finalSegmentCount = segmentsToKeep.Count - 1;
 
