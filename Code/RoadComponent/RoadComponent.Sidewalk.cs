@@ -102,37 +102,37 @@ public partial class RoadComponent
 			float leftAvgV1 = leftAvgUVDist;
 			float rightAvgV1 = rightAvgUVDist;
 
-			AddTexturedQuad(
+			MeshUtility.AddTexturedQuad(
 				polygonMesh,
 				material,
 				frameVertices[i][2], frameVertices[i + 1][2], frameVertices[i + 1][3], frameVertices[i][3],
 				new Vector2(0, leftAvgV0), new Vector2(0, leftAvgV1), new Vector2(1, leftAvgV1), new Vector2(1, leftAvgV0));
 
-			AddTexturedQuad(
+			MeshUtility.AddTexturedQuad(
 				polygonMesh,
 				material,
 				frameVertices[i][0], frameVertices[i + 1][0], frameVertices[i + 1][2], frameVertices[i][2],
 				new Vector2(v2, leftAvgV0), new Vector2(v2, leftAvgV1), new Vector2(0, leftAvgV1), new Vector2(0, leftAvgV0));
 
-			AddTexturedQuad(
+			MeshUtility.AddTexturedQuad(
 				polygonMesh,
 				material,
 				frameVertices[i][1], frameVertices[i][3], frameVertices[i + 1][3], frameVertices[i + 1][1],
 				new Vector2(1 - v2, 1 - leftAvgV0), new Vector2(1, 1 - leftAvgV0), new Vector2(1, 1 - leftAvgV1), new Vector2(1 - v2, 1 - leftAvgV1));
 
-			AddTexturedQuad(
+			MeshUtility.AddTexturedQuad(
 				polygonMesh,
 				material,
 				frameVertices[i][6], frameVertices[i][7], frameVertices[i + 1][7], frameVertices[i + 1][6],
 				new Vector2(0, rightAvgV0), new Vector2(1, rightAvgV0), new Vector2(1, rightAvgV1), new Vector2(0, rightAvgV1));
 
-			AddTexturedQuad(
+			MeshUtility.AddTexturedQuad(
 				polygonMesh,
 				material,
 				frameVertices[i][4], frameVertices[i][6], frameVertices[i + 1][6], frameVertices[i + 1][4],
 				new Vector2(v2, rightAvgV0), new Vector2(0, rightAvgV0), new Vector2(0, rightAvgV1), new Vector2(v2, rightAvgV1));
 
-			AddTexturedQuad(
+			MeshUtility.AddTexturedQuad(
 				polygonMesh,
 				material,
 				frameVertices[i][5], frameVertices[i + 1][5], frameVertices[i + 1][7], frameVertices[i][7],

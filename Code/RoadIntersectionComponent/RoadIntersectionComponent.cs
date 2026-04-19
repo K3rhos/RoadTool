@@ -22,27 +22,28 @@ public enum IntersectionShape
 [Icon("roundabout_left")]
 public partial class RoadIntersectionComponent : Component, Component.ExecuteInEditor
 {
-	private MeshBuilder m_MeshBuilder;
+	private bool m_IsDirty;
 
-	[Property, Feature("General", Icon = "public", Tint = EditorTint.White), Order(0)] private IntersectionShape Shape { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = IntersectionShape.Rectangle;
+	private bool IsInPlayMode => LoadingScreen.IsVisible || Game.IsPlaying;
 
-	[Property(Title = "Material"), Feature("General"), Order(0)] private Material RoadMaterial { get; set { field = value; m_MeshBuilder?.IsDirty = true; } }
-	[Property(Title = "Texture Repeat"), Feature("General"), Order(0)] private float RoadTextureRepeat { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 500.0f;
+	private const string IntersectionRoadTag = "intersection_road";
+	private const string IntersectionSidewalkTag = "intersection_sidewalk";
 
-	[Property(Title = "Material"), Feature("General"), Category("Sidewalk"), Order(3)] private Material SidewalkMaterial { get; set { field = value; m_MeshBuilder?.IsDirty = true; } }
-	[Property(Title = "Width"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkWidth { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 150.0f;
-	[Property(Title = "Height"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkHeight { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 5.0f;
-	[Property(Title = "Texture Repeat"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkTextureRepeat { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 200.0f;
+	[Property, Feature("General", Icon = "public", Tint = EditorTint.White), Order(0)] private IntersectionShape Shape { get; set { field = value; m_IsDirty = true; } } = IntersectionShape.Rectangle;
+
+	[Property(Title = "Material"), Feature("General"), Order(0)] private Material RoadMaterial { get; set { field = value; m_IsDirty = true; } }
+	[Property(Title = "Texture Repeat"), Feature("General"), Order(0)] private float RoadTextureRepeat { get; set { field = value; m_IsDirty = true; } } = 500.0f;
+
+	[Property(Title = "Material"), Feature("General"), Category("Sidewalk"), Order(3)] private Material SidewalkMaterial { get; set { field = value; m_IsDirty = true; } }
+	[Property(Title = "Width"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkWidth { get; set { field = value; m_IsDirty = true; } } = 150.0f;
+	[Property(Title = "Height"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkHeight { get; set { field = value; m_IsDirty = true; } } = 5.0f;
+	[Property(Title = "Texture Repeat"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkTextureRepeat { get; set { field = value; m_IsDirty = true; } } = 200.0f;
 
 
 
 	protected override void OnEnabled()
 	{
-		m_MeshBuilder = new MeshBuilder(GameObject);
-		m_MeshBuilder.OnBuild += BuildAllMeshes;
-		m_MeshBuilder.PhysicsSurface = HasCustomPhysics ? IntersectionSurface : null;
-		m_MeshBuilder.Rebuild();
-
+		BuildAllMeshes();
 		CreateTrafficLights();
 	}
 
@@ -50,9 +51,7 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 
 	protected override void OnDisabled()
 	{
-		m_MeshBuilder?.OnBuild -= BuildAllMeshes;
-		m_MeshBuilder?.Clear();
-
+		DestroyMeshChildren();
 		RemoveTrafficLights();
 	}
 
@@ -60,7 +59,16 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 
 	protected override void OnUpdate()
 	{
-		m_MeshBuilder?.Update();
+		if (m_IsDirty)
+		{
+			if (!IsInPlayMode)
+			{
+				DestroyMeshChildren();
+				BuildAllMeshes();
+			}
+
+			m_IsDirty = false;
+		}
 
 		UpdateTrafficLights();
 	}
@@ -72,7 +80,6 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 		if (!Gizmo.IsSelected)
 			return;
 
-		// Draw the bounds of the intersection
 		Gizmo.Draw.LineThickness = 2.0f;
 
 		if (Shape == IntersectionShape.Rectangle)
@@ -92,7 +99,6 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 			Gizmo.Draw.LineCylinder(Vector3.Zero, Vector3.Up * SidewalkHeight, Radius + SidewalkWidth, Radius + SidewalkWidth, 32);
 		}
 
-		// Draw exit indicators
 		if (Shape == IntersectionShape.Rectangle)
 		{
 			foreach (RectangleExit val in System.Enum.GetValues<RectangleExit>())
@@ -101,12 +107,10 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 					continue;
 
 				Transform transform = GetRectangleExitLocalTransform(val);
-
 				Gizmo.Draw.Color = Color.Cyan;
 				Gizmo.Draw.Arrow(transform.Position, transform.Position + transform.Forward * 100.0f);
 
 				transform = GetRectangleExitLocalTransform(val, true);
-
 				Gizmo.Draw.Color = Color.Green;
 				Gizmo.Draw.Arrow(transform.Position, transform.Position + transform.Forward * 100.0f);
 			}
@@ -115,33 +119,69 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 
 
 
+	private void DestroyMeshChildren()
+	{
+		var toRemove = GameObject.Children
+			.Where(c => c.Tags.Has(IntersectionRoadTag) || c.Tags.Has(IntersectionSidewalkTag))
+			.ToList();
+
+		foreach (var child in toRemove)
+			child.Destroy();
+	}
+
+
+
 	private void BuildAllMeshes()
 	{
-		BuildRoad();
-		BuildSidewalk();
+		if (IsInPlayMode)
+			return;
+
+		var roadMat = RoadMaterial ?? Material.Load("materials/dev/reflectivity_30.vmat");
+		var sidewalkMat = SidewalkMaterial ?? Material.Load("materials/dev/reflectivity_70.vmat");
+
+		var roadMesh = new PolygonMesh();
+		BuildRoad(roadMesh, roadMat);
+
+		var roadChild = new GameObject(GameObject, true, "Intersection_Road");
+		roadChild.Tags.Add(IntersectionRoadTag);
+		var roadMC = roadChild.AddComponent<MeshComponent>();
+		roadMC.Mesh = roadMesh;
+		roadMC.SmoothingAngle = 40.0f;
+
+		if (SidewalkWidth > 0 && SidewalkHeight > 0)
+		{
+			var sidewalkMesh = new PolygonMesh();
+			BuildSidewalk(sidewalkMesh, sidewalkMat);
+
+			var swChild = new GameObject(GameObject, true, "Intersection_Sidewalk");
+			swChild.Tags.Add(IntersectionSidewalkTag);
+			var swMC = swChild.AddComponent<MeshComponent>();
+			swMC.Mesh = sidewalkMesh;
+			swMC.SmoothingAngle = 40.0f;
+		}
 	}
 
 
 
-	private void BuildRoad()
+	private void BuildRoad(PolygonMesh _Mesh, Material _Material)
 	{
 		if (Shape == IntersectionShape.Rectangle)
-			BuildRectangleRoad();
+			BuildRectangleRoad(_Mesh, _Material);
 		else
-			BuildCircleRoad();
+			BuildCircleRoad(_Mesh, _Material);
 	}
 
 
 
-	private void BuildSidewalk()
+	private void BuildSidewalk(PolygonMesh _Mesh, Material _Material)
 	{
 		if (SidewalkWidth <= 0 || SidewalkHeight <= 0)
 			return;
 
 		if (Shape == IntersectionShape.Rectangle)
-			BuildRectangleSidewalk();
+			BuildRectangleSidewalk(_Mesh, _Material);
 		else
-			BuildCircleSidewalk();
+			BuildCircleSidewalk(_Mesh, _Material);
 	}
 
 
@@ -162,11 +202,9 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 
 			foreach (RoadComponent road in roads)
 			{
-				// Check start point of the road
 				if (Vector3.DistanceBetween(road.WorldPosition, exitTransform.Position) < snapDistance)
 				{
 					road.WorldPosition = exitTransform.Position;
-
 					road.RoadWidth = side is RectangleExit.North or RectangleExit.South ? Width : Length;
 				}
 			}

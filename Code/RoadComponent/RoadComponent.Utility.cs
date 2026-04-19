@@ -1,6 +1,6 @@
 using System;
-using System.Numerics;
 using System.Collections.Generic;
+using System.Numerics;
 using System.Linq;
 using Sandbox;
 
@@ -265,19 +265,6 @@ public partial class RoadComponent
 			return _SimplifiedPositions[0].frame;
 
 		return _SimplifiedPositions[^1].frame;
-	}
-
-
-
-	private static void AddTexturedQuad(PolygonMesh _PolygonMesh, Material _Material, HalfEdgeMesh.VertexHandle _A, HalfEdgeMesh.VertexHandle _B, HalfEdgeMesh.VertexHandle _C, HalfEdgeMesh.VertexHandle _D, Vector2 _UvA, Vector2 _UvB, Vector2 _UvC, Vector2 _UvD)
-	{
-		var face = _PolygonMesh.AddFace(_A, _B, _C, _D);
-
-		if (!face.IsValid)
-			return;
-
-		_PolygonMesh.SetFaceMaterial(face, _Material);
-		_PolygonMesh.SetFaceTextureCoords(face, new List<Vector2> { _UvA, _UvB, _UvC, _UvD });
 	}
 
 

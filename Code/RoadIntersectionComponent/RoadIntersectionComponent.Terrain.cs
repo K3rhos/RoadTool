@@ -6,10 +6,7 @@ namespace RedSnail.RoadTool;
 
 public partial class RoadIntersectionComponent
 {
-	[Property, FeatureEnabled("Terrain", Icon = "landscape", Tint = EditorTint.Green)]
-	private bool HasTerrainModification { get; set; } = false;
-
-	[Property, Feature("Terrain"), Hide]
+	[Property, Feature("Terrain", Icon = "landscape", Tint = EditorTint.Green)]
 	private Terrain TerrainTarget { get; set; }
 
 	[Property, Feature("Terrain"), Range(0f, 2000f)]

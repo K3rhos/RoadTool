@@ -17,6 +17,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 	private const string RoadMeshTag = "road_mesh";
 	private const string RoadSurfaceTag = "road_surface";
 	private const string SidewalkSurfaceTag = "road_sidewalk";
+	private const string LineSurfaceTag = "road_lines";
 
 	[Property, Feature("General", Icon = "public", Tint = EditorTint.White), Category("Optimization")] private bool AutoSimplify { get; set { field = value; IsDirty = true; } } = false;
 	[Property, Feature("General"), Category("Optimization"), Range(0.1f, 10.0f)] private float StraightThreshold { get; set { field = value; IsDirty = true; } } = 1.0f; // Degrees - how straight before merging
@@ -32,7 +33,6 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 			field = value;
 
 			m_DoesRoadMeshNeedRebuild = value;
-			m_LinesBuilder?.IsDirty = value;
 			m_DoesLamppostsNeedRebuild = value;
 		}
 	}
@@ -100,6 +100,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 
 		RebuildRoadMesh();
 		RebuildSidewalkMesh();
+		RebuildLinesMesh();
 
 		m_DoesRoadMeshNeedRebuild = false;
 	}

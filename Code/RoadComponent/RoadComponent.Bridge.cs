@@ -138,7 +138,7 @@ public partial class RoadComponent
 				float u0 = profileDistances[edgeIndex];
 				float u1 = profileDistances[edgeIndex + 1];
 
-				AddTexturedQuad(
+				MeshUtility.AddTexturedQuad(
 					polygonMesh,
 					_Material,
 					vertices[currentIndex0],
@@ -263,7 +263,7 @@ public partial class RoadComponent
 			float edgeLength = Vector3.DistanceBetween(topCorners[side], topCorners[next]) / _TextureRepeat;
 			float vLength = _Height / _TextureRepeat;
 
-			AddTexturedQuad(
+			MeshUtility.AddTexturedQuad(
 				_PolygonMesh,
 				_Material,
 				vertices[side],
@@ -305,7 +305,7 @@ public partial class RoadComponent
 			float u1 = (circumference * (side + 1) / segmentCount) / _TextureRepeat;
 			float v1 = _Height / _TextureRepeat;
 
-			AddTexturedQuad(
+			MeshUtility.AddTexturedQuad(
 				_PolygonMesh,
 				_Material,
 				vertices[side],

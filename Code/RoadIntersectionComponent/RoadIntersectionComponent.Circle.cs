@@ -12,9 +12,9 @@ public class CircleExit
 
 public partial class RoadIntersectionComponent
 {
-	[Property, Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private float Radius { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 600.0f;
-	[Property, Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private float Precision { get; set { field = value.Clamp(10.0f, 10000.0f); m_MeshBuilder?.IsDirty = true; } } = 40.0f;
-	[Property(Title = "Exits"), Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private List<CircleExit> CircleExits { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = new();
+	[Property, Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private float Radius { get; set { field = value; m_IsDirty = true; } } = 600.0f;
+	[Property, Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private float Precision { get; set { field = value.Clamp(10.0f, 10000.0f); m_IsDirty = true; } } = 40.0f;
+	[Property(Title = "Exits"), Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private List<CircleExit> CircleExits { get; set { field = value; m_IsDirty = true; } } = new();
 
 
 
@@ -28,20 +28,14 @@ public partial class RoadIntersectionComponent
 
 
 
-	private void BuildCircleRoad()
+	private void BuildCircleRoad(PolygonMesh _Mesh, Material _Material)
 	{
-		Vector3 up = Vector3.Up;
+		var cache = new Dictionary<Vector3, HalfEdgeMesh.VertexHandle>();
+
 		int segments = GetCircleSegmentCount();
 		float step = 360.0f / segments;
 
-		int activeSegments = 0;
-
-		for (int i = 0; i < segments; i++)
-		{
-			if (!ArcBlockedByExit(i * step, (i + 1) * step)) activeSegments++;
-		}
-
-		m_MeshBuilder.InitSubmesh("intersection_road", activeSegments * 3, activeSegments * 3, RoadMaterial ?? Material.Load("materials/dev/reflectivity_30.vmat"), true);
+		var vCenter = MeshUtility.GetOrAddVertex(_Mesh, cache, Vector3.Zero);
 
 		for (int i = 0; i < segments; i++)
 		{
@@ -51,33 +45,30 @@ public partial class RoadIntersectionComponent
 			if (ArcBlockedByExit(a0, a1))
 				continue;
 
-			Vector3 d0 = Rotation.FromYaw(a0).Forward;
-			Vector3 d1 = Rotation.FromYaw(a1).Forward;
+			Vector3 d0 = Rotation.FromYaw(a0).Forward * Radius;
+			Vector3 d1 = Rotation.FromYaw(a1).Forward * Radius;
 
-			m_MeshBuilder.AddTriangle("intersection_road", Vector3.Zero, d0 * Radius, d1 * Radius,
-				up, d0, Vector2.Zero, new Vector2(0, 1), new Vector2(1, 1));
+			var vD0 = MeshUtility.GetOrAddVertex(_Mesh, cache, d0);
+			var vD1 = MeshUtility.GetOrAddVertex(_Mesh, cache, d1);
+
+			MeshUtility.AddTexturedTriangle(_Mesh, _Material, vCenter, vD0, vD1,
+				Vector2.Zero, new Vector2(0, 1), new Vector2(1, 1));
 		}
 	}
 
 
 
-	private void BuildCircleSidewalk()
+	private void BuildCircleSidewalk(PolygonMesh _Mesh, Material _Material)
 	{
-		Vector3 up = Vector3.Up;
+		var cache = new Dictionary<Vector3, HalfEdgeMesh.VertexHandle>();
+
 		int segments = GetCircleSegmentCount();
 		float step = 360f / segments;
-
-		int activeSegments = 0;
-
-		for (int i = 0; i < segments; i++)
-		{
-			if (!ArcBlockedByExit(i * step, (i + 1) * step)) activeSegments++;
-		}
-
-		m_MeshBuilder.InitSubmesh("intersection_sidewalk", activeSegments * 8, activeSegments * 12, SidewalkMaterial ?? Material.Load("materials/dev/reflectivity_70.vmat"), true);
+		Vector3 up = Vector3.Up;
 
 		float innerR = Radius;
 		float outerR = Radius + SidewalkWidth;
+		float heightUV = SidewalkHeight / SidewalkTextureRepeat;
 
 		for (int i = 0; i < segments; i++)
 		{
@@ -87,56 +78,36 @@ public partial class RoadIntersectionComponent
 			if (ArcBlockedByExit(a0, a1))
 				continue;
 
-			float d0 = innerR * (a0 * MathF.PI / 180f);
-			float d1 = innerR * (a1 * MathF.PI / 180f);
+			float arcDist0 = innerR * (a0 * MathF.PI / 180f);
+			float arcDist1 = innerR * (a1 * MathF.PI / 180f);
 
-			float v0 = d0 / SidewalkTextureRepeat;
-			float v1 = d1 / SidewalkTextureRepeat;
+			float v0 = arcDist0 / SidewalkTextureRepeat;
+			float v1 = arcDist1 / SidewalkTextureRepeat;
 
 			Vector3 d0V = Rotation.FromYaw(a0).Forward;
 			Vector3 d1V = Rotation.FromYaw(a1).Forward;
-
-			Vector3 n0 = -d0V; // Normal at angle a0
-			Vector3 n1 = -d1V; // Normal at angle a1
 
 			Vector3 i0 = d0V * innerR;
 			Vector3 i1 = d1V * innerR;
 			Vector3 o0 = d0V * outerR;
 			Vector3 o1 = d1V * outerR;
 
-			Vector3 segmentTangent = (i1 - i0).Normal;
+			var vI0 = MeshUtility.GetOrAddVertex(_Mesh, cache, i0);
+			var vI1 = MeshUtility.GetOrAddVertex(_Mesh, cache, i1);
+			var vO0 = MeshUtility.GetOrAddVertex(_Mesh, cache, o0);
+			var vO1 = MeshUtility.GetOrAddVertex(_Mesh, cache, o1);
+			var vTI0 = MeshUtility.GetOrAddVertex(_Mesh, cache, i0 + up * SidewalkHeight);
+			var vTI1 = MeshUtility.GetOrAddVertex(_Mesh, cache, i1 + up * SidewalkHeight);
+			var vTO0 = MeshUtility.GetOrAddVertex(_Mesh, cache, o0 + up * SidewalkHeight);
+			var vTO1 = MeshUtility.GetOrAddVertex(_Mesh, cache, o1 + up * SidewalkHeight);
 
 			// Top face
-			m_MeshBuilder.AddQuad(
-			   "intersection_sidewalk",
-			   o0 + up * SidewalkHeight,
-			   o1 + up * SidewalkHeight,
-			   i1 + up * SidewalkHeight,
-			   i0 + up * SidewalkHeight,
-			   up,
-			   segmentTangent,
-			   new Vector2(1, v0), // Outer Start
-			   new Vector2(1, v1), // Outer End
-			   new Vector2(0, v1), // Inner End
-			   new Vector2(0, v0)  // Inner Start
-			);
+			MeshUtility.AddTexturedQuad(_Mesh, _Material, vTO0, vTO1, vTI1, vTI0,
+				new Vector2(1, v0), new Vector2(1, v1), new Vector2(0, v1), new Vector2(0, v0));
 
 			// Curb face
-			float heightUV = SidewalkHeight / SidewalkTextureRepeat;
-
-			m_MeshBuilder.AddQuad(
-			   "intersection_sidewalk",
-			   i0 + up * SidewalkHeight,
-			   i1 + up * SidewalkHeight,
-			   i1,
-			   i0,
-			   n0, n1, n1, n0,
-			   segmentTangent,
-			   new Vector2(0, v0),        // Top Start
-			   new Vector2(0, v1),        // Top End
-			   new Vector2(heightUV, v1), // Bottom End
-			   new Vector2(heightUV, v0)  // Bottom Start
-			);
+			MeshUtility.AddTexturedQuad(_Mesh, _Material, vTI0, vTI1, vI1, vI0,
+				new Vector2(0, v0), new Vector2(0, v1), new Vector2(heightUV, v1), new Vector2(heightUV, v0));
 		}
 	}
 
@@ -161,8 +132,7 @@ public partial class RoadIntersectionComponent
 			float halfAngle = float.Atan(exit.RoadWidth / Radius).RadianToDegree();
 			float ea = exit.AngleDegrees;
 
-			if (AngleDelta(_A0, ea) < halfAngle ||
-				AngleDelta(_A1, ea) < halfAngle)
+			if (AngleDelta(_A0, ea) < halfAngle || AngleDelta(_A1, ea) < halfAngle)
 				return true;
 		}
 

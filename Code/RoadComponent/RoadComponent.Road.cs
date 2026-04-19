@@ -59,7 +59,7 @@ public partial class RoadComponent
 			Vector2 uv11 = new Vector2(r1.x, r1.y) / RoadTextureInchesPerRepeat;
 			Vector2 uv01 = new Vector2(l1.x, l1.y) / RoadTextureInchesPerRepeat;
 
-			AddTexturedQuad(polygonMesh, material, frameVertices[i][0], frameVertices[i][1], frameVertices[i + 1][1], frameVertices[i + 1][0], uv00, uv10, uv11, uv01);
+			MeshUtility.AddTexturedQuad(polygonMesh, material, frameVertices[i][0], frameVertices[i][1], frameVertices[i + 1][1], frameVertices[i + 1][0], uv00, uv10, uv11, uv01);
 		}
 
 		CreateRoadMeshComponent(polygonMesh);
