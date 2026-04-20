@@ -9,7 +9,10 @@ namespace RedSnail.RoadTool;
 [Icon("local_parking")]
 public partial class RoadParkingLotComponent : Component, Component.ExecuteInEditor
 {
-	private MeshBuilder m_MeshBuilder;
+	private bool m_IsDirty;
+
+	private const string LinesTag = "parking_lines";
+	private const string CurbsTag = "parking_curbs";
 
 	/// <summary>
 	/// An optional prefab, if non-empty the parking lot will generate a bunch of child gameobjects positioned at each parking spots center.
@@ -20,45 +23,36 @@ public partial class RoadParkingLotComponent : Component, Component.ExecuteInEdi
 	/// <summary>
 	/// The amount of parking spots you want to generate.
 	/// </summary>
-	[Property, Feature("General"), Range(1, 50)] private int SpotCount { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 10;
+	[Property, Feature("General"), Range(1, 50)] private int SpotCount { get; set { field = value; m_IsDirty = true; } } = 10;
 
 	/// <summary>
 	/// Well that's the parking spot length
 	/// </summary>
-	[Property, Feature("General"), Range(10.0f, 1000.0f)] private float SpotLength { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 250.0f;
+	[Property, Feature("General"), Range(10.0f, 1000.0f)] private float SpotLength { get; set { field = value; m_IsDirty = true; } } = 250.0f;
 
 	/// <summary>
 	/// and width...
 	/// </summary>
-	[Property, Feature("General"), Range(10.0f, 1000.0f)] private float SpotWidth { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 150.0f;
+	[Property, Feature("General"), Range(10.0f, 1000.0f)] private float SpotWidth { get; set { field = value; m_IsDirty = true; } } = 150.0f;
 
 	/// <summary>
 	/// The angle of the parking spots in degrees (0 = perpendicular, 45 = angled, 90 = parallel)
 	/// </summary>
-	[Property, Feature("General"), Range(-90.0f, 90.0f), Step(1.0f)] private float SpotAngle { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 0.0f;
-	[Property, Feature("General"), Range(0.5f, 1.0f)] private float SpotAngleThreshold { get; set { field = value; m_MeshBuilder?.IsDirty = true; } } = 0.5f;
+	[Property, Feature("General"), Range(-90.0f, 90.0f), Step(1.0f)] private float SpotAngle { get; set { field = value; m_IsDirty = true; } } = 0.0f;
+	[Property, Feature("General"), Range(0.5f, 1.0f)] private float SpotAngleThreshold { get; set { field = value; m_IsDirty = true; } } = 0.5f;
 
 
 
 	protected override void OnEnabled()
 	{
-		m_MeshBuilder = new MeshBuilder(GameObject)
-		{
-			CastShadows = false
-		};
-
-		m_MeshBuilder.OnBuild += BuildAllMeshes;
-		m_MeshBuilder.PhysicsSurface = HasCustomPhysics ? ParkingLotSurface : null;
-		m_MeshBuilder.Rebuild();
+		BuildAllMeshes();
 	}
 
 
 
 	protected override void OnDisabled()
 	{
-		m_MeshBuilder?.OnBuild -= BuildAllMeshes;
-		m_MeshBuilder?.Clear();
-
+		DestroyMeshChildren();
 		RemoveParkingSpots();
 	}
 
@@ -66,13 +60,37 @@ public partial class RoadParkingLotComponent : Component, Component.ExecuteInEdi
 
 	protected override void OnUpdate()
 	{
-		m_MeshBuilder?.Update();
+		if (m_IsDirty)
+		{
+			if (!SandboxUtility.IsInPlayMode)
+			{
+				DestroyMeshChildren();
+				BuildAllMeshes();
+			}
+
+			m_IsDirty = false;
+		}
+	}
+
+
+
+	private void DestroyMeshChildren()
+	{
+		var toRemove = GameObject.Children
+			.Where(c => c.Tags.Has(LinesTag) || c.Tags.Has(CurbsTag))
+			.ToList();
+
+		foreach (var child in toRemove)
+			child.Destroy();
 	}
 
 
 
 	private void BuildAllMeshes()
 	{
+		if (SandboxUtility.IsInPlayMode)
+			return;
+
 		BuildParkingLines();
 		BuildCurbs();
 

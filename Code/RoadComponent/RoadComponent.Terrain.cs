@@ -65,7 +65,8 @@ public partial class RoadComponent
 	{
 		if (!TerrainTarget.IsValid())
 		{
-			TerrainTarget = Scene.GetAllComponents<Terrain>().FirstOrDefault();
+			// Always take the closest terrain
+			TerrainTarget = Scene.GetAllComponents<Terrain>().OrderBy(x => x.WorldPosition.DistanceSquared(WorldPosition)).FirstOrDefault();
 		}
 
 		if (!TerrainTarget.IsValid())

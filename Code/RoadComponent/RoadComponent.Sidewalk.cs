@@ -159,7 +159,7 @@ public partial class RoadComponent
 
 	private void EnsureSidewalkMeshExist()
 	{
-		if (IsInPlayMode)
+		if (SandboxUtility.IsInPlayMode)
 			return;
 
 		if (IsSidewalkLocked)

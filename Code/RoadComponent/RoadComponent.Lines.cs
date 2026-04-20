@@ -43,7 +43,7 @@ public partial class RoadComponent
 
 	private void EnsureLinesMeshExist()
 	{
-		if (IsInPlayMode)
+		if (SandboxUtility.IsInPlayMode)
 			return;
 
 		if (HasGeneratedMeshChildren(LineSurfaceTag))
@@ -56,7 +56,7 @@ public partial class RoadComponent
 
 	private void RebuildLinesMesh()
 	{
-		if (IsInPlayMode)
+		if (SandboxUtility.IsInPlayMode)
 			return;
 
 		RemoveGeneratedMeshChildren(LineSurfaceTag);
@@ -187,6 +187,7 @@ public partial class RoadComponent
 			meshComponent.Collision = MeshComponent.CollisionType.None;
 			meshComponent.RenderType = ModelRenderer.ShadowRenderType.Off;
 			meshComponent.SmoothingAngle = 40.0f;
+			meshComponent.Static = true;
 		}
 	}
 }

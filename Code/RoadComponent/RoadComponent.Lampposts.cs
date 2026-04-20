@@ -52,7 +52,7 @@ public partial class RoadComponent
 
 	private void RemoveLampposts()
 	{
-		if (IsInPlayMode)
+		if (SandboxUtility.IsInPlayMode)
 			return;
 
 		GameObject containerObject = GameObject.Children.FirstOrDefault(x => x.Name == "Lampposts");
@@ -79,7 +79,7 @@ public partial class RoadComponent
 
 	private void BuildLampposts()
 	{
-		if (IsInPlayMode)
+		if (SandboxUtility.IsInPlayMode)
 			return;
 
 		GameObject containerObject = new GameObject(GameObject, true, "Lampposts");

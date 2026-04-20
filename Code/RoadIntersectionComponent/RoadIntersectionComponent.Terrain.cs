@@ -6,7 +6,7 @@ namespace RedSnail.RoadTool;
 
 public partial class RoadIntersectionComponent
 {
-	[Property, Feature("Terrain", Icon = "landscape", Tint = EditorTint.Green)]
+	[Property, Feature("Terrain", Icon = "landscape", Tint = EditorTint.Green), Hide]
 	private Terrain TerrainTarget { get; set; }
 
 	[Property, Feature("Terrain"), Range(0f, 2000f)]
@@ -14,6 +14,9 @@ public partial class RoadIntersectionComponent
 
 	[Property, Feature("Terrain"), Range(-10f, 10f)]
 	public float TerrainHeightOffset { get; set; } = 0f;
+
+	[Property, Feature("Terrain"), Range(0f, 100f)]
+	public float TerrainRoadInset { get; set; } = 10f;
 
 	[Property, Feature("Terrain"), Group("Texture"), Range(100f, 1000f)]
 	public float TerrainEdgeRadius { get; set; } = 500f;
@@ -32,12 +35,28 @@ public partial class RoadIntersectionComponent
 		new Gradient.ColorFrame(0, Color.White),
 		new Gradient.ColorFrame(1, Color.White.WithAlpha(0f))
 	);
+	
+	
+	
+	[Button("Apply to the Ground"), Feature("Terrain")]
+	private void ApplyTerrainToGround()
+	{
+		if (!Scene.IsEditor)
+			return;
 
+		AdaptTerrainToIntersection();
+	}
+	
+	
+	
 	public void AdaptTerrainToIntersection()
 	{
 		if (!TerrainTarget.IsValid())
-			TerrainTarget = Scene.GetAllComponents<Terrain>().FirstOrDefault();
-
+		{
+			// Always take the closest terrain
+			TerrainTarget = Scene.GetAllComponents<Terrain>().OrderBy(x => x.WorldPosition.DistanceSquared(WorldPosition)).FirstOrDefault();
+		}
+		
 		if (!TerrainTarget.IsValid())
 		{
 			Log.Warning("RoadTool: No Terrain found in scene.");
@@ -53,18 +72,13 @@ public partial class RoadIntersectionComponent
 		float terrainMaxHeight = storage.TerrainHeight;
 		float halfSize = terrainSize * 0.5f;
 
-		// Detect coordinate system (Center vs Corner)
-		var centerLocal = TerrainTarget.Transform.World.PointToLocal(WorldPosition);
-		bool localIsCentered = centerLocal.x < 0f || centerLocal.x > terrainSize || centerLocal.y < 0f || centerLocal.y > terrainSize;
-
 		// Calculate bounds including falloff
 		float boundSize = (Shape == IntersectionShape.Rectangle ? Math.Max(Width, Length) * 0.5f : Radius) + TerrainFalloffRadius;
 		BBox worldBounds = new BBox(WorldPosition - new Vector3(boundSize), WorldPosition + new Vector3(boundSize));
 
 		var heightMap = storage.HeightMap;
 
-		// Capture initial state for Undo 
-		var previousHeightMap = heightMap.ToArray();
+		// Capture initial state for Undo
 		bool hasModified = false;
 
 		// Initialize buffers for height calculation 
@@ -110,21 +124,28 @@ public partial class RoadIntersectionComponent
 
 				if (distance > TerrainFalloffRadius) continue;
 
-				// 3. Target height matching RoadComponent (0 to MaxHeight range) 
+				// 3. Target height matching RoadComponent (0 to MaxHeight range)
 				Vector3 intersectionLocalPos = TerrainTarget.Transform.World.PointToLocal(WorldPosition);
-				float targetHeightFloat = Math.Clamp(intersectionLocalPos.z + TerrainHeightOffset, 0f, terrainMaxHeight);
+				float roadSurfaceHeight = Math.Clamp(intersectionLocalPos.z + TerrainHeightOffset, 0f, terrainMaxHeight);
+				float roadInsetHeight = Math.Clamp(roadSurfaceHeight - TerrainRoadInset, 0f, terrainMaxHeight);
+				float currentPixelHeight = (heightMap[index] / (float)ushort.MaxValue) * terrainMaxHeight;
 
 				float candidateHeight;
-				if (distance <= 0) // Inside the intersection
+				if (distance <= 0) // Inside the intersection — sink terrain below road to prevent Z-fighting
 				{
-					candidateHeight = targetHeightFloat;
+					candidateHeight = roadInsetHeight;
 				}
-				else
+				else if (SidewalkWidth > 0f && distance <= SidewalkWidth) // Sidewalk ring — flush with road surface
 				{
-					float t = Math.Clamp(distance / TerrainFalloffRadius, 0f, 1f);
+					candidateHeight = roadSurfaceHeight;
+				}
+				else // Falloff — blend from surface/inset back to original terrain
+				{
+					float transitionStart = SidewalkWidth > 0f ? SidewalkWidth : 0f;
+					float transitionBaseHeight = SidewalkWidth > 0f ? roadSurfaceHeight : roadInsetHeight;
+					float t = Math.Clamp((distance - transitionStart) / TerrainFalloffRadius, 0f, 1f);
 					float smoothT = t * t * (3f - 2f * t);
-					float currentPixelHeight = (heightMap[index] / (float)ushort.MaxValue) * terrainMaxHeight;
-					candidateHeight = MathX.Lerp(targetHeightFloat, currentPixelHeight, smoothT);
+					candidateHeight = MathX.Lerp(transitionBaseHeight, currentPixelHeight, smoothT);
 				}
 
 				if (distance < bestDistance[index])
@@ -276,13 +297,44 @@ public partial class RoadIntersectionComponent
 	{
 		if (Shape == IntersectionShape.Rectangle)
 		{
-			float dx = MathF.Max(MathF.Abs(localPixelPos.x) - Length * 0.5f, 0);
-			float dy = MathF.Max(MathF.Abs(localPixelPos.y) - Width * 0.5f, 0);
-			return MathF.Sqrt(dx * dx + dy * dy);
+			float hl = Length * 0.5f;
+			float hw = Width * 0.5f;
+			float dx = MathF.Max(MathF.Abs(localPixelPos.x) - hl, 0);
+			float dy = MathF.Max(MathF.Abs(localPixelPos.y) - hw, 0);
+			float dist = MathF.Sqrt(dx * dx + dy * dy);
+
+			// Treat active exit corridors as inside — prevents terrain poking through road openings.
+			// In S&box local space Forward = +x, Right = -y, so East corridor is at y < -hw and West at y > +hw.
+			if (dist > 0)
+			{
+				if (RectangleExits.HasFlag(RectangleExit.North) && localPixelPos.x >  hl && MathF.Abs(localPixelPos.y) <= hw) return 0;
+				if (RectangleExits.HasFlag(RectangleExit.South) && localPixelPos.x < -hl && MathF.Abs(localPixelPos.y) <= hw) return 0;
+				if (RectangleExits.HasFlag(RectangleExit.East)  && localPixelPos.y < -hw && MathF.Abs(localPixelPos.x) <= hl) return 0;
+				if (RectangleExits.HasFlag(RectangleExit.West)  && localPixelPos.y >  hw && MathF.Abs(localPixelPos.x) <= hl) return 0;
+			}
+
+			return dist;
 		}
-		else // Circle
+
+		// Circle
+		float radDist = MathF.Max(localPixelPos.WithZ(0).Length - Radius, 0);
+
+		if (radDist > 0 && CircleExits != null && CircleExits.Count > 0)
 		{
-			return MathF.Max(localPixelPos.Length - Radius, 0);
+			Vector3 pixelDir = localPixelPos.WithZ(0);
+			if (pixelDir.LengthSquared > 0.0001f)
+				pixelDir = pixelDir.Normal;
+
+			foreach (var exit in CircleExits)
+			{
+				// Use dot product to stay independent of angle conventions
+				Vector3 exitDir = Rotation.FromYaw(exit.AngleDegrees).Forward;
+				float cosHalfAngle = MathF.Cos(MathF.Atan(exit.RoadWidth / Radius));
+				if (Vector3.Dot(pixelDir, exitDir) >= cosHalfAngle)
+					return 0;
+			}
 		}
+
+		return radDist;
 	}
 }

@@ -11,9 +11,9 @@ public sealed class RoadLineDefinition : GameResource
 
 	[Range(0.0f, 1.0f)]
 	public float DashFillRatio { get; set { field = value.Clamp(0.0f, 1.0f); } } = 1.0f;
-
-
-
+	
+	
+	
 	protected override Bitmap CreateAssetTypeIcon(int _Width, int _Height)
 	{
 		return CreateSimpleAssetTypeIcon("line_axis", _Width, _Height, "#00ccff", "black");

@@ -24,8 +24,6 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 {
 	private bool m_IsDirty;
 
-	private bool IsInPlayMode => LoadingScreen.IsVisible || Game.IsPlaying;
-
 	private const string IntersectionRoadTag = "intersection_road";
 	private const string IntersectionSidewalkTag = "intersection_sidewalk";
 
@@ -61,7 +59,7 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 	{
 		if (m_IsDirty)
 		{
-			if (!IsInPlayMode)
+			if (!SandboxUtility.IsInPlayMode)
 			{
 				DestroyMeshChildren();
 				BuildAllMeshes();
@@ -133,7 +131,7 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 
 	private void BuildAllMeshes()
 	{
-		if (IsInPlayMode)
+		if (SandboxUtility.IsInPlayMode)
 			return;
 
 		var roadMat = RoadMaterial ?? Material.Load("materials/dev/reflectivity_30.vmat");
@@ -186,7 +184,7 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 
 
 
-	[Button("Snap Nearby Roads (WIP)"), Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Rectangle), Order(10)]
+	[Button("Snap Nearby Roads"), Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Rectangle), Order(10)]
 	public void SnapNearbyRoads()
 	{
 		var roads = Scene.GetAll<RoadComponent>().ToList();
@@ -199,15 +197,35 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 				continue;
 
 			Transform exitTransform = GetRectangleExitTransform(side, true);
+			float roadWidth = side is RectangleExit.North or RectangleExit.South ? Width : Length;
 
 			foreach (RoadComponent road in roads)
 			{
+				// Snap start: first spline point is at local origin, so WorldPosition == its world position
 				if (Vector3.DistanceBetween(road.WorldPosition, exitTransform.Position) < snapDistance)
 				{
 					road.WorldPosition = exitTransform.Position;
-					road.RoadWidth = side is RectangleExit.North or RectangleExit.South ? Width : Length;
+					road.RoadWidth = roadWidth;
+					continue;
+				}
+
+				// Snap end: check the last spline point's world position
+				if (road.Spline.PointCount > 0)
+				{
+					int lastIdx = road.Spline.PointCount - 1;
+					Vector3 lastWorldPos = road.WorldTransform.PointToWorld(road.Spline.GetPoint(lastIdx).Position);
+
+					if (Vector3.DistanceBetween(lastWorldPos, exitTransform.Position) < snapDistance)
+					{
+						var point = road.Spline.GetPoint(lastIdx);
+						point.Position = road.WorldTransform.PointToLocal(exitTransform.Position);
+						road.Spline.UpdatePoint(lastIdx, point);
+						road.RoadWidth = roadWidth;
+					}
 				}
 			}
 		}
+		
+		SandboxUtility.ShowEditorNotification("Snapped Nearby Roads Succesfully");
 	}
 }

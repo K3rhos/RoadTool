@@ -469,7 +469,7 @@ public partial class RoadComponent
 
 	private void EnsureBridgeMeshExist()
 	{
-		if (IsInPlayMode)
+		if (SandboxUtility.IsInPlayMode)
 			return;
 
 		if (IsLocked)

@@ -8,11 +8,6 @@ namespace RedSnail.RoadTool;
 
 public partial class RoadComponent
 {
-	// Game.IsPlaying is broken right now on S&box, using LoadingScreen.IsVisible is a good alternative to tell if we're playing the game bcs this one is true when stuff init for the first time
-	public bool IsInPlayMode => LoadingScreen.IsVisible || Game.IsPlaying;
-
-
-
 	private static Vector3 ParallelTransport(Vector3 _Up, Vector3 _PreviousTangent, Vector3 _CurrentTangent)
 	{
 		Vector3 rotationAxis = Vector3.Cross(_PreviousTangent, _CurrentTangent);

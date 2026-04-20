@@ -82,7 +82,7 @@ public partial class RoadComponent
 
 	private void EnsureRoadMeshExist()
 	{
-		if (IsInPlayMode)
+		if (SandboxUtility.IsInPlayMode)
 			return;
 
 		if (IsRoadLocked)

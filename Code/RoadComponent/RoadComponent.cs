@@ -109,7 +109,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 
 	private void RebuildRoadMesh()
 	{
-		if (IsInPlayMode)
+		if (SandboxUtility.IsInPlayMode)
 			return;
 
 		if (IsRoadLocked)
@@ -123,7 +123,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 
 	private void RebuildSidewalkMesh()
 	{
-		if (IsInPlayMode)
+		if (SandboxUtility.IsInPlayMode)
 			return;
 
 		if (IsSidewalkLocked)
