@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Sandbox;
 
@@ -11,7 +12,7 @@ public enum IntersectionShape
 	Rectangle,
 
 	/// <summary>
-	/// (WIP) Circle mode is incomplete and really experimental yet
+	/// Circular mode is allowing you to create roundabout like type of intersection
 	/// </summary>
 	Circle
 }
@@ -22,7 +23,7 @@ public enum IntersectionShape
 [Icon("roundabout_left")]
 public partial class RoadIntersectionComponent : Component, Component.ExecuteInEditor
 {
-	private bool m_IsDirty;
+	public bool m_IsDirty;
 
 	private const string IntersectionRoadTag = "intersection_road";
 	private const string IntersectionSidewalkTag = "intersection_sidewalk";
@@ -31,7 +32,7 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 
 	[Property(Title = "Material"), Feature("General"), Order(0)] private Material RoadMaterial { get; set { field = value; m_IsDirty = true; } }
 	[Property(Title = "Texture Repeat"), Feature("General"), Order(0)] private float RoadTextureRepeat { get; set { field = value; m_IsDirty = true; } } = 500.0f;
-
+	
 	[Property(Title = "Material"), Feature("General"), Category("Sidewalk"), Order(3)] private Material SidewalkMaterial { get; set { field = value; m_IsDirty = true; } }
 	[Property(Title = "Width"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkWidth { get; set { field = value; m_IsDirty = true; } } = 150.0f;
 	[Property(Title = "Height"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkHeight { get; set { field = value; m_IsDirty = true; } } = 5.0f;
@@ -184,48 +185,68 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 
 
 
-	[Button("Snap Nearby Roads"), Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Rectangle), Order(10)]
+	[Button("Snap Nearby Roads"), Feature("General"), Order(10)]
 	public void SnapNearbyRoads()
 	{
 		var roads = Scene.GetAll<RoadComponent>().ToList();
 
 		const float snapDistance = 300.0f;
 
-		foreach (RectangleExit side in System.Enum.GetValues<RectangleExit>())
+		if (Shape == IntersectionShape.Rectangle)
 		{
-			if (side == RectangleExit.None || !RectangleExits.HasFlag(side))
-				continue;
-
-			Transform exitTransform = GetRectangleExitTransform(side, true);
-			float roadWidth = side is RectangleExit.North or RectangleExit.South ? Width : Length;
-
-			foreach (RoadComponent road in roads)
+			foreach (RectangleExit side in System.Enum.GetValues<RectangleExit>())
 			{
-				// Snap start: first spline point is at local origin, so WorldPosition == its world position
-				if (Vector3.DistanceBetween(road.WorldPosition, exitTransform.Position) < snapDistance)
-				{
-					road.WorldPosition = exitTransform.Position;
-					road.RoadWidth = roadWidth;
+				if (side == RectangleExit.None || !RectangleExits.HasFlag(side))
 					continue;
-				}
 
-				// Snap end: check the last spline point's world position
-				if (road.Spline.PointCount > 0)
-				{
-					int lastIdx = road.Spline.PointCount - 1;
-					Vector3 lastWorldPos = road.WorldTransform.PointToWorld(road.Spline.GetPoint(lastIdx).Position);
+				Transform exitTransform = GetRectangleExitTransform(side, true);
+				float roadWidth = side is RectangleExit.North or RectangleExit.South ? Width : Length;
 
-					if (Vector3.DistanceBetween(lastWorldPos, exitTransform.Position) < snapDistance)
-					{
-						var point = road.Spline.GetPoint(lastIdx);
-						point.Position = road.WorldTransform.PointToLocal(exitTransform.Position);
-						road.Spline.UpdatePoint(lastIdx, point);
-						road.RoadWidth = roadWidth;
-					}
-				}
+				SnapRoadsToExit(roads, exitTransform, roadWidth, snapDistance);
+			}
+		}
+		else
+		{
+			for (int i = 0; i < CircleExits.Length; i++)
+			{
+				Transform exitTransform = GetCircleExitTransform(i, true);
+				float roadWidth = CircleExits[i].RoadWidth;
+
+				SnapRoadsToExit(roads, exitTransform, roadWidth, snapDistance);
 			}
 		}
 
 		SandboxUtility.ShowEditorNotification("Snapped Nearby Roads Succesfully");
+	}
+
+
+
+	private static void SnapRoadsToExit(List<RoadComponent> _Roads, Transform _ExitTransform, float _RoadWidth, float _SnapDistance)
+	{
+		foreach (RoadComponent road in _Roads)
+		{
+			// Snap start: first spline point is at local origin, so WorldPosition == its world position
+			if (Vector3.DistanceBetween(road.WorldPosition, _ExitTransform.Position) < _SnapDistance)
+			{
+				road.WorldPosition = _ExitTransform.Position;
+				road.RoadWidth = _RoadWidth;
+				continue;
+			}
+
+			// Snap end: check the last spline point's world position
+			if (road.Spline.PointCount > 0)
+			{
+				int lastIdx = road.Spline.PointCount - 1;
+				Vector3 lastWorldPos = road.WorldTransform.PointToWorld(road.Spline.GetPoint(lastIdx).Position);
+
+				if (Vector3.DistanceBetween(lastWorldPos, _ExitTransform.Position) < _SnapDistance)
+				{
+					var point = road.Spline.GetPoint(lastIdx);
+					point.Position = road.WorldTransform.PointToLocal(_ExitTransform.Position);
+					road.Spline.UpdatePoint(lastIdx, point);
+					road.RoadWidth = _RoadWidth;
+				}
+			}
+		}
 	}
 }

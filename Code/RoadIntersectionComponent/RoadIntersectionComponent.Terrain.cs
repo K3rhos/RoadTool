@@ -319,7 +319,7 @@ public partial class RoadIntersectionComponent
 		// Circle
 		float radDist = MathF.Max(localPixelPos.WithZ(0).Length - Radius, 0);
 
-		if (radDist > 0 && CircleExits != null && CircleExits.Count > 0)
+		if (radDist > 0 && CircleExits != null && CircleExits.Length > 0)
 		{
 			Vector3 pixelDir = localPixelPos.WithZ(0);
 			if (pixelDir.LengthSquared > 0.0001f)
