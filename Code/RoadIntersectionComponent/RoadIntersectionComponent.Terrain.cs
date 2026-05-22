@@ -35,9 +35,9 @@ public partial class RoadIntersectionComponent
 		new Gradient.ColorFrame(0, Color.White),
 		new Gradient.ColorFrame(1, Color.White.WithAlpha(0f))
 	);
-	
-	
-	
+
+
+
 	[Button("Apply to the Ground"), Feature("Terrain")]
 	private void ApplyTerrainToGround()
 	{
@@ -46,9 +46,9 @@ public partial class RoadIntersectionComponent
 
 		AdaptTerrainToIntersection();
 	}
-	
-	
-	
+
+
+
 	public void AdaptTerrainToIntersection()
 	{
 		if (!TerrainTarget.IsValid())
@@ -56,7 +56,7 @@ public partial class RoadIntersectionComponent
 			// Always take the closest terrain
 			TerrainTarget = Scene.GetAllComponents<Terrain>().OrderBy(x => x.WorldPosition.DistanceSquared(WorldPosition)).FirstOrDefault();
 		}
-		
+
 		if (!TerrainTarget.IsValid())
 		{
 			Log.Warning("RoadTool: No Terrain found in scene.");
@@ -307,10 +307,10 @@ public partial class RoadIntersectionComponent
 			// In S&box local space Forward = +x, Right = -y, so East corridor is at y < -hw and West at y > +hw.
 			if (dist > 0)
 			{
-				if (RectangleExits.HasFlag(RectangleExit.North) && localPixelPos.x >  hl && MathF.Abs(localPixelPos.y) <= hw) return 0;
+				if (RectangleExits.HasFlag(RectangleExit.North) && localPixelPos.x > hl && MathF.Abs(localPixelPos.y) <= hw) return 0;
 				if (RectangleExits.HasFlag(RectangleExit.South) && localPixelPos.x < -hl && MathF.Abs(localPixelPos.y) <= hw) return 0;
-				if (RectangleExits.HasFlag(RectangleExit.East)  && localPixelPos.y < -hw && MathF.Abs(localPixelPos.x) <= hl) return 0;
-				if (RectangleExits.HasFlag(RectangleExit.West)  && localPixelPos.y >  hw && MathF.Abs(localPixelPos.x) <= hl) return 0;
+				if (RectangleExits.HasFlag(RectangleExit.East) && localPixelPos.y < -hw && MathF.Abs(localPixelPos.x) <= hl) return 0;
+				if (RectangleExits.HasFlag(RectangleExit.West) && localPixelPos.y > hw && MathF.Abs(localPixelPos.x) <= hl) return 0;
 			}
 
 			return dist;

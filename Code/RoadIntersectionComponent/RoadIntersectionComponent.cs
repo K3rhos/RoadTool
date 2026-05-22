@@ -225,7 +225,7 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 				}
 			}
 		}
-		
+
 		SandboxUtility.ShowEditorNotification("Snapped Nearby Roads Succesfully");
 	}
 }

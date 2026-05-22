@@ -199,19 +199,19 @@ public partial class RoadParkingLotComponent
 
 		for (int i = 0; i < CurbsSegments; i++)
 		{
-			Vector3 v1L = centerL + lengthDir * profile[i].x     + up * profile[i].y;
+			Vector3 v1L = centerL + lengthDir * profile[i].x + up * profile[i].y;
 			Vector3 v2L = centerL + lengthDir * profile[i + 1].x + up * profile[i + 1].y;
-			Vector3 v1R = centerR + lengthDir * profile[i].x     + up * profile[i].y;
+			Vector3 v1R = centerR + lengthDir * profile[i].x + up * profile[i].y;
 			Vector3 v2R = centerR + lengthDir * profile[i + 1].x + up * profile[i + 1].y;
 
-			Vector2 uvC  = new Vector2(0.5f, 0) * (CurbsDepth / CurbsTextureRepeat);
-			Vector2 uv1  = new Vector2((profile[i].x     + halfD) / CurbsTextureRepeat, profile[i].y     / CurbsTextureRepeat);
-			Vector2 uv2  = new Vector2((profile[i + 1].x + halfD) / CurbsTextureRepeat, profile[i + 1].y / CurbsTextureRepeat);
+			Vector2 uvC = new Vector2(0.5f, 0) * (CurbsDepth / CurbsTextureRepeat);
+			Vector2 uv1 = new Vector2((profile[i].x + halfD) / CurbsTextureRepeat, profile[i].y / CurbsTextureRepeat);
+			Vector2 uv2 = new Vector2((profile[i + 1].x + halfD) / CurbsTextureRepeat, profile[i + 1].y / CurbsTextureRepeat);
 
-			var vCL  = MeshUtility.GetOrAddVertex(_Mesh, _Cache, centerL);
+			var vCL = MeshUtility.GetOrAddVertex(_Mesh, _Cache, centerL);
 			var vV1L = MeshUtility.GetOrAddVertex(_Mesh, _Cache, v1L);
 			var vV2L = MeshUtility.GetOrAddVertex(_Mesh, _Cache, v2L);
-			var vCR  = MeshUtility.GetOrAddVertex(_Mesh, _Cache, centerR);
+			var vCR = MeshUtility.GetOrAddVertex(_Mesh, _Cache, centerR);
 			var vV1R = MeshUtility.GetOrAddVertex(_Mesh, _Cache, v1R);
 			var vV2R = MeshUtility.GetOrAddVertex(_Mesh, _Cache, v2R);
 
