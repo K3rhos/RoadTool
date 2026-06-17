@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Sandbox;
@@ -18,12 +19,17 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 	[Property, Feature("Traffic"), Category("Vehicles"), Range(0, 500)] private int VehicleCount { get; set { field = value; m_IsDirty = true; } } = 30;
 	[Property(Title = "Default Speed"), Feature("Traffic"), Category("Vehicles"), Range(5.0f, 130.0f)] private float DefaultSpeed { get; set; } = 30.0f;
 	[Property(Title = "Following Gap"), Feature("Traffic"), Category("Vehicles"), Range(50.0f, 600.0f)] private float VehicleSpacing { get; set; } = 180.0f;
+	[Property(Title = "Spawn Gap"), Feature("Traffic"), Category("Vehicles"), Range(50.0f, 1000.0f)] private float SpawnGap { get; set; } = 250.0f;
+	[Property(Title = "Stop Margin"), Feature("Traffic"), Category("Vehicles"), Range(0.0f, 500.0f)] private float StopMargin { get; set; } = 150.0f;
 	[Property(Title = "Height Offset"), Feature("Traffic"), Category("Vehicles"), Range(0.0f, 300.0f)] private float HoverHeight { get; set; } = 45.0f;
 
 	[Property(Title = "Brake For Tags"), Feature("Traffic"), Category("Awareness")] private TagSet AwarenessTags { get; set; }
-	[Property(Title = "Detect Radius"), Feature("Traffic"), Category("Awareness"), Range(10.0f, 200.0f)] private float AwarenessRadius { get; set; } = 50.0f;
+	[Property(Title = "Detect Radius"), Feature("Traffic"), Category("Awareness"), Range(10.0f, 200.0f)] private float AwarenessRadius { get; set; } = 100.0f;
 
-	[Property, Feature("Traffic"), Category("Layout"), Range(50.0f, 500.0f)] private float WaypointSpacing { get; set { field = value; m_IsDirty = true; } } = 150.0f;
+	[Property(Title = "Lose Patience After"), Feature("Traffic"), Category("Road Rage"), Range(1.0f, 120.0f)] private float LoosePatience { get; set; } = 20.0f;
+	[Property(Title = "Road Rage Duration"), Feature("Traffic"), Category("Road Rage"), Range(1.0f, 120.0f)] private float RoadRageDuration { get; set; } = 20.0f;
+
+	[Property, Feature("Traffic"), Category("Layout"), Range(50.0f, 500.0f)] private float WaypointSpacing { get; set { field = value.Clamp(10.0f, 10000.0f); m_IsDirty = true; } } = 150.0f;
 	[Property(Title = "Connection Distance"), Feature("Traffic"), Category("Layout"), Range(20.0f, 600.0f)] private float LinkThreshold { get; set { field = value; m_IsDirty = true; } } = 200.0f;
 
 	[Property, Feature("Traffic"), Category("Debug")] private bool ShowLayoutGizmos { get; set; } = true;
@@ -127,24 +133,48 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 			return;
 		}
 
-		m_VehicleContainer = new GameObject(GameObject, true, VehicleContainerName);
-		m_VehicleContainer.Flags |= GameObjectFlags.NotSaved;
-
 		// Spawn on road lanes when available so cars start out on actual roads, not mid-intersection.
-		var pool = m_Graph.Lanes.Where(l => l.IsRoadLane && l.Waypoints.Count >= 2).ToList();
+		var lanes = m_Graph.Lanes.Where(l => l.IsRoadLane && l.Waypoints.Count >= 2).ToList();
 
-		if (pool.Count == 0)
-			pool = m_Graph.Lanes.Where(l => l.Waypoints.Count >= 2).ToList();
+		if (lanes.Count == 0)
+			lanes = m_Graph.Lanes.Where(l => l.Waypoints.Count >= 2).ToList();
 
-		if (pool.Count == 0)
+		if (lanes.Count == 0)
+			return;
+
+		// Lay out non-overlapping spawn slots along every lane — a waypoint index every few steps so two cars can
+		// never land on the same spot. The total slot count is the network's capacity, which also caps how many we
+		// spawn (a short road simply can't hold hundreds of cars).
+		int step = Math.Max(1, (int)MathF.Ceiling(SpawnGap / MathF.Max(1.0f, WaypointSpacing)));
+
+		var slots = new List<(TrafficLane Lane, int Index)>();
+
+		foreach (var lane in lanes)
+		{
+			for (int idx = 0; idx < lane.Waypoints.Count - 1; idx += step)
+				slots.Add((lane, idx));
+		}
+
+		if (slots.Count == 0)
 			return;
 
 		var rng = new System.Random();
 
-		for (int i = 0; i < VehicleCount; i++)
+		// Shuffle so a smaller VehicleCount spreads across the whole network instead of packing the first lanes.
+		for (int i = slots.Count - 1; i > 0; i--)
 		{
-			TrafficLane lane = pool[rng.Next(pool.Count)];
-			int startIndex = rng.Next(0, lane.Waypoints.Count - 1);
+			int j = rng.Next(i + 1);
+			(slots[i], slots[j]) = (slots[j], slots[i]);
+		}
+
+		int spawnCount = Math.Min(VehicleCount, slots.Count);
+
+		m_VehicleContainer = new GameObject(GameObject, true, VehicleContainerName);
+		m_VehicleContainer.Flags |= GameObjectFlags.NotSaved;
+
+		for (int i = 0; i < spawnCount; i++)
+		{
+			(TrafficLane lane, int startIndex) = slots[i];
 			Vector3 spawnPos = lane.Waypoints[startIndex] + Vector3.Up * HoverHeight;
 
 			GameObject clone = VehiclePrefab.Clone(m_VehicleContainer, spawnPos, Rotation.Identity, Vector3.One);
@@ -161,6 +191,9 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 			vehicle.DefaultSpeed = DefaultSpeed * TrafficMath.KmhToUnits;
 			vehicle.HoverHeight = HoverHeight;
 			vehicle.Spacing = VehicleSpacing;
+			vehicle.StopMargin = StopMargin;
+			vehicle.LoosePatience = LoosePatience;
+			vehicle.RoadRageDuration = RoadRageDuration;
 			vehicle.Neighbors = m_Vehicles;
 			vehicle.AwareTags = AwarenessTags;
 			vehicle.DetectRadius = AwarenessRadius;
@@ -168,6 +201,9 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 
 			m_Vehicles.Add(vehicle);
 		}
+
+		if (spawnCount < VehicleCount)
+			SandboxUtility.ShowEditorNotification($"Traffic: the road network only fits {spawnCount} of {VehicleCount} vehicles");
 	}
 	
 	

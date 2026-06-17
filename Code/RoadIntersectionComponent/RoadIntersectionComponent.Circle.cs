@@ -18,7 +18,20 @@ public partial class RoadIntersectionComponent
 	[Property, Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private float Radius { get; set { field = value; m_IsDirty = true; } } = 1000.0f;
 	[Property, Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1), Range(4, 8)] private int DiscSegmentsPower { get; set { field = value.Clamp(4, 8); m_IsDirty = true; } } = 6;
 	[Property(Title = "Exits"), Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1), Change] private CircleExit[] CircleExits { get; set; } = [];
-	
+
+	/// <summary>When enabled, traffic circulates around a ring (roundabout) instead of crossing straight through — so paths never cross.</summary>
+	[Property(Title = "Roundabout Mode"), Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1)] private bool RoundaboutMode { get; set; } = false;
+	[Property(Title = "Ring Scale"), Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1), Range(0.2f, 0.95f)] private float RoundaboutRingScale { get; set; } = 0.65f;
+
+	/// <summary>Widens the entry/exit "arms" where each road meets the ring (1 = natural lane offset). Clamped so arms never reach a neighbouring leg.</summary>
+	[Property(Title = "Arm Spread"), Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Circle), Order(1), Range(0.5f, 4.0f)] public float RoundaboutArmSpread { get; set; } = 1.5f;
+
+	/// <summary>True when this is a circle intersection routing traffic around a ring rather than straight across.</summary>
+	public bool IsRoundabout => Shape == IntersectionShape.Circle && RoundaboutMode;
+
+	/// <summary>World-units radius of the drivable ring vehicles follow in roundabout mode.</summary>
+	public float RoundaboutRingRadius => Radius * RoundaboutRingScale;
+
 	private int DiscSegments => 1 << DiscSegmentsPower;
 	
 	

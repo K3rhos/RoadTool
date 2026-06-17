@@ -4,12 +4,24 @@ using Sandbox;
 
 namespace RedSnail.RoadTool;
 
+/// <summary>How a traffic vehicle is behaving right now.</summary>
+public enum AIState
+{
+	/// <summary>Following the rules — lanes, lights, gaps, yielding.</summary>
+	Normal,
+
+	/// <summary>Lost patience behind a player/prop: reverses and tries to barge around the obstacle for a while.</summary>
+	RoadRage
+}
+
 /// <summary>
 /// A single AI vehicle. It follows its current lane's waypoints, and when it reaches the end it picks a random
 /// successor lane (or U-turns at a dead end) and smoothly connects onto it. Spawned and configured by <see cref="RoadManager"/>.
 /// </summary>
 public sealed class TrafficVehicle : Component
 {
+	private ModelRenderer m_ModelRenderer;
+	
 	public RoadTrafficGraph Graph { get; set; }
 	public float HoverHeight { get; set; } = 40.0f;
 	public float TurnRate { get; set; } = 6.0f;
@@ -28,6 +40,19 @@ public sealed class TrafficVehicle : Component
 
 	/// <summary>Radius of the forward sweep used to sense tagged entities.</summary>
 	public float DetectRadius { get; set; } = 50.0f;
+
+	/// <summary>How far before an intersection's stop line the vehicle aims to halt for a red light / yield, so
+	/// leftover braking momentum doesn't carry it over the line (and the crosswalk) into the junction.</summary>
+	public float StopMargin { get; set; } = 150.0f;
+
+	/// <summary>Seconds the driver will sit blocked by a tagged entity (player/prop) before losing patience and entering road rage.</summary>
+	public float LoosePatience { get; set; } = 20.0f;
+
+	/// <summary>Seconds road rage lasts once triggered — it stays aggressive this long even after the obstacle clears.</summary>
+	public float RoadRageDuration { get; set; } = 20.0f;
+
+	/// <summary>Current AI behaviour (Normal / RoadRage).</summary>
+	public AIState State => m_State;
 
 	/// <summary>True while driving a road lane; false while crossing an intersection or connector.</summary>
 	public bool IsOnRoadLane => m_Lane?.IsRoadLane ?? true;
@@ -82,6 +107,20 @@ public sealed class TrafficVehicle : Component
 	private int m_Id;
 	private float m_FrontExtent;
 	private float m_RearExtent;
+	private CarController m_Car;
+	private AIState m_State = AIState.Normal;
+	private float m_BlockedTime;     // seconds blocked by an entity (patience timer)
+	private float m_RoadRageTime;    // seconds of road rage left
+	private float m_EntityAhead = float.MaxValue; // cached distance to the nearest tagged entity this frame
+	private bool m_EntityAheadIsAiCar;            // …and whether that nearest entity is another AI traffic car (braked for, but ignored by the rage machine)
+	private float m_RageSwerve = 1.0f;            // which way (+1/-1) we lean while raging
+	private bool m_RageReversing;
+	private bool m_RageGiveUp;        // stopped trying to dodge a pushable entity — now barging over it
+	private float m_RageBlockedTime;  // cumulative time thwarted by the entity this rage (→ give up and barge)
+	private float m_StuckTime;        // time spent shoving forward but barely moving (→ reverse to get unstuck)
+	private float m_ReverseTime;      // how long we've been reversing this attempt
+	private bool m_RageGoAround;      // steering wide around an obstacle (latched while blocked + a short hold after)
+	private float m_GoAroundHold;     // remaining hold time for the go-around after the obstacle clears
 	private System.Random m_Rng;
 
 
@@ -107,6 +146,12 @@ public sealed class TrafficVehicle : Component
 		WorldRotation = Rotation.LookAt(m_Heading, Vector3.Up);
 
 		ComputeForwardExtents();
+
+		// If the prefab as a model renderer attaced to it, we retrieve to determine bounds of the vehicle
+		m_ModelRenderer = GetComponent<ModelRenderer>();
+		
+		// If the spawned prefab is a real physics car, we drive it through its controller instead of on rails.
+		m_Car = GetComponent<CarController>();
 	}
 
 
@@ -153,13 +198,45 @@ public sealed class TrafficVehicle : Component
 
 
 
+	private const float SteerFullLock = 0.5f;       // heading error (radians) that calls for full steering lock
+	private const float ThrottleGain = 0.02f;       // throttle/brake per (unit/s) of speed error
+	private const float StopSpeed = 20.0f;          // desired speed below this ⇒ come to a full stop
+	private const float RageAvoidWindow = 5.0f;     // seconds spent thwarted by a (pushable) entity while raging before giving up dodging
+	private const float RageStuckSpeed = 15.0f;     // below this while shoving forward ⇒ we're jammed on something immovable
+	private const float RageStuckTime = 1.0f;       // …for this long ⇒ reverse and try another angle
+	private const float RageReverseDuration = 1.2f;  // seconds to back up before trying forward again
+	private const float RageAroundClearance = 260.0f; // how far to the side we aim when steering around an obstacle
+	private const float RageContactGap = 15.0f;     // bumper gap (units) below which an AI car ahead is a collision, not a queue — rage may break the deadlock
+	private const float MaxCorneringAccel = 250.0f; // lateral-grip budget (units/s²) → how fast we dare take a curve (raise = more daring)
+	private const float BrakeDecel = 350.0f;        // assumed braking deceleration (units/s²) for the slow-in-time profile (lower = brakes earlier)
+
+
+
 	protected override void OnUpdate()
 	{
 		if (Graph is null || m_Path.Count < 2)
 			return;
 
+		// With a physics CarController on the object, feed it engine/brake/steer and let physics move it; otherwise
+		// fall back to the lightweight on-rails movement (kinematic placeholder vehicles).
+		if (m_Car.IsValid())
+		{
+			if (m_Car.IsAiControlled)
+			{
+				DriveCarController();	
+			}
+		}
+		else
+			DriveOnRails();
+	}
+
+
+
+	private void DriveOnRails()
+	{
 		// Speed comes from the current segment: the road/intersection lane's limit, or DefaultSpeed while crossing
 		// a connector or dead-end U-turn. ComputeSpeedScale then brakes for vehicles / tagged entities ahead.
+		m_EntityAhead = NearestEntityAhead();
 		float segmentSpeed = m_Target <= m_ConnectorEnd ? DefaultSpeed : m_Lane.SpeedLimit;
 		m_SpeedScale = ComputeSpeedScale();
 		float remaining = segmentSpeed * m_SpeedScale * Time.Delta;
@@ -211,6 +288,379 @@ public sealed class TrafficVehicle : Component
 
 
 
+	// Drives a physics CarController along the lane path: pure-pursuit steering toward the look-ahead waypoint, plus
+	// a throttle/brake that chases the desired speed produced by the SAME rules the on-rails vehicle uses — so the
+	// AI car still obeys every gap / intersection / light / conflict rule, it just gets there via engine and brakes.
+	private void DriveCarController()
+	{
+		m_Pos = WorldPosition;
+
+		Vector3 fwd = WorldRotation.Forward;
+
+		if (!fwd.IsNearZeroLength)
+			m_Heading = fwd.Normal;
+
+		bool hasBody = m_Car.Rigidbody.IsValid();
+		float planarSpeed = hasBody ? m_Car.Rigidbody.Velocity.WithZ(0.0f).Length : 0.0f;
+
+		AdvancePathProgress(planarSpeed);
+
+		if (m_Path.Count < 2)
+			return;
+
+		// Patience / road-rage state machine, then the aggressive driver takes over for the whole rage.
+		m_EntityAhead = NearestEntityAhead();
+		UpdateAIState();
+
+		if (m_State == AIState.RoadRage)
+		{
+			DriveRoadRage();
+			return;
+		}
+
+		float segmentSpeed = m_Target <= m_ConnectorEnd ? DefaultSpeed : m_Lane.SpeedLimit;
+		m_SpeedScale = ComputeSpeedScale();
+		float desiredSpeed = segmentSpeed * m_SpeedScale;
+
+		// Self-preservation: never carry more speed into the upcoming curve than grip can hold (slowing in time to
+		// make it), and back off further if we've already drifted off our lane so we recover the line.
+		desiredSpeed = MathF.Min(desiredSpeed, CorneringSpeedLimit(planarSpeed));
+		desiredSpeed *= LaneDeviationSpeedFactor();
+
+		// Pure-pursuit steering toward the look-ahead waypoint.
+		float steer = SteerToward(m_Path[m_Target]);
+
+		// Throttle chases the desired speed; a negative value brakes (the CarController reads reverse-while-rolling-
+		// forward as a brake). To STOP we brake only while still rolling, then cut throttle and hold with the
+		// handbrake — pushing negative throttle once stopped would make the controller drive in reverse instead.
+		float forwardSpeed = hasBody ? Vector3.Dot(m_Car.Rigidbody.Velocity, WorldRotation.Forward) : 0.0f;
+		bool wantStop = desiredSpeed < StopSpeed;
+
+		float throttle;
+		bool handbrake = false;
+
+		if (wantStop)
+		{
+			if (forwardSpeed > 10.0f)
+			{
+				throttle = -1.0f;
+			}
+			else
+			{
+				throttle = 0.0f;
+				handbrake = true;
+			}
+		}
+		else
+		{
+			throttle = ((desiredSpeed - forwardSpeed) * ThrottleGain).Clamp(-1.0f, 1.0f);
+		}
+		
+		m_Car.AiThrottle = throttle;
+		m_Car.AiSteer = steer;
+		m_Car.AiHandbrake = handbrake;
+	}
+
+
+
+	// Walks m_Target forward as the car physically reaches or passes each waypoint, rolling onto the next lane at
+	// the end. The capture radius grows a little with speed so faster cars look slightly further ahead.
+	private void AdvancePathProgress(float _Speed)
+	{
+		float capture = (_Speed * 0.3f).Clamp(100.0f, 220.0f);
+		int guard = 0;
+
+		while (guard++ < 64)
+		{
+			Vector3 toTarget = (m_Path[m_Target] - m_Pos).WithZ(0.0f);
+			Vector3 segDir = (m_Target > 0 ? (m_Path[m_Target] - m_Path[m_Target - 1]) : m_Heading).WithZ(0.0f);
+
+			bool passed = !segDir.IsNearZeroLength && Vector3.Dot(toTarget, segDir.Normal) < 0.0f;
+			bool captured = toTarget.Length < capture;
+
+			if (!passed && !captured)
+				break;
+
+			if (m_Target >= m_Path.Count - 1)
+			{
+				AdvanceToNextLane();
+
+				if (m_Path.Count < 2)
+					return;
+			}
+			else
+			{
+				m_Target++;
+			}
+		}
+	}
+
+
+
+	// Steering input [-1, 1] that turns the car toward a world point (pure pursuit). Positive = left.
+	private float SteerToward(Vector3 _WorldTarget)
+	{
+		Vector3 to = (_WorldTarget - m_Pos).WithZ(0.0f);
+
+		if (to.IsNearZeroLength)
+			return 0.0f;
+
+		to = to.Normal;
+		float crossZ = m_Heading.x * to.y - m_Heading.y * to.x;
+		float dot = Vector3.Dot(m_Heading, to).Clamp(-1.0f, 1.0f);
+		float angle = MathF.Atan2(crossZ, dot);                 // signed heading error (radians)
+
+		return (angle / SteerFullLock).Clamp(-1.0f, 1.0f);
+	}
+
+
+
+	// A rage-relevant obstacle sits within following distance ahead. A player/prop always counts. Another AI traffic
+	// car normally does NOT — we brake for it via the gap system but it stays invisible to the rage machine, so a
+	// queue at a red light never makes the car behind "lose patience". The one exception is a genuine collision: if
+	// an AI car is jammed right against our bumper (not merely queued at a normal gap), the two can stay wedged
+	// together forever, so there we DO let the rage machine kick in to break the deadlock.
+	private bool HasRageEntityAhead => m_EntityAhead < Spacing && (!m_EntityAheadIsAiCar || IsTouchingVehicleAhead());
+
+
+
+	// True when another traffic car is jammed right up against our front (bumper gap below RageContactGap) — a real
+	// collision, not a following gap. We deliberately do NOT use the awareness sphere's hit distance for this: that
+	// sphere's radius is the (large) AwarenessRadius, so it reports a near-zero distance even for a car queued a full
+	// gap ahead. Pivot-to-pivot distance minus both bodies' extents is the true bumper gap, and only contact drives it to ~0.
+	private bool IsTouchingVehicleAhead()
+	{
+		if (Neighbors is null)
+			return false;
+
+		foreach (var other in Neighbors)
+		{
+			if (other == this || !other.IsValid())
+				continue;
+
+			Vector3 toOther = (other.WorldPosition - WorldPosition).WithZ(0.0f);
+
+			if (Vector3.Dot(toOther, m_Heading) <= 0.0f)
+				continue; // only something in front of us
+
+			if (toOther.Length - m_FrontExtent - other.RearExtent < RageContactGap)
+				return true;
+		}
+
+		return false;
+	}
+
+
+
+	// Patience → road-rage state machine. While Normal, time spent stuck behind a tagged entity (player/prop)
+	// accrues; past LoosePatience the driver snaps into RoadRage for RoadRageDuration seconds — staying aggressive
+	// for the full duration even after the obstacle clears — then reverts to Normal.
+	private void UpdateAIState()
+	{
+		bool entityClose = HasRageEntityAhead;              // a player/prop (never an AI car) is right in front of us
+		bool blocked = entityClose && m_SpeedScale < 0.1f;  // …and we're stuck behind it
+
+		if (m_State == AIState.Normal)
+		{
+			m_BlockedTime = blocked ? m_BlockedTime + Time.Delta : 0.0f;
+
+			if (m_BlockedTime >= LoosePatience)
+			{
+				m_State = AIState.RoadRage;
+				m_RoadRageTime = RoadRageDuration;
+				m_BlockedTime = 0.0f;
+				m_RageBlockedTime = 0.0f;
+				m_StuckTime = 0.0f;
+				m_ReverseTime = 0.0f;
+				m_RageGiveUp = false;
+				m_RageReversing = false;
+				m_RageGoAround = false;
+				m_RageSwerve = m_Rng.Next(2) == 0 ? 1.0f : -1.0f; // pick a side to lean toward
+			}
+		}
+		else // RoadRage
+		{
+			m_RoadRageTime -= Time.Delta;
+
+			if (m_RoadRageTime <= 0.0f)
+			{
+				m_State = AIState.Normal;
+				m_BlockedTime = 0.0f;
+				m_RageGiveUp = false;
+				m_RageReversing = false;
+				m_RageGoAround = false;
+			}
+			else if (!m_RageGiveUp)
+			{
+				// Still trying to dodge — but if the entity keeps thwarting us, give up and just plough through.
+				if (entityClose)
+					m_RageBlockedTime += Time.Delta;
+
+				if (m_RageBlockedTime >= RageAvoidWindow)
+					m_RageGiveUp = true;
+			}
+		}
+	}
+
+
+
+	// The aggressive driver. It shoves forward, and when something is in the way it steers WIDE around it — aiming
+	// at a point pushed RageAroundClearance out to one side so it commits to a real arc, not a token wiggle. If it
+	// jams (shoving forward but barely moving — a wall / heavy prop) it backs up to make room and flips to the other
+	// side, latching the go-around until it's moving freely again. WHAT it dodges depends on the phase:
+	//   • Dodging (not given up): a tagged entity in front (avoid it) OR a physical jam.
+	//   • Barging (given up): only a physical jam — so it rolls over anything it can push (the player) but still
+	//     backs out and goes around anything it truly can't move.
+	private void DriveRoadRage()
+	{
+		float forwardSpeed = m_Car.Rigidbody.IsValid() ? Vector3.Dot(m_Car.Rigidbody.Velocity, WorldRotation.Forward) : 0.0f;
+		float planarSpeed = m_Car.Rigidbody.IsValid() ? m_Car.Rigidbody.Velocity.WithZ(0.0f).Length : 0.0f;
+
+		bool entityBlocking = !m_RageGiveUp && HasRageEntityAhead;
+
+		// Jam = shoving forward but barely moving. (Only meaningful while we're actually going forward.)
+		bool jammed = false;
+
+		if (!m_RageReversing)
+		{
+			m_StuckTime = planarSpeed < RageStuckSpeed ? m_StuckTime + Time.Delta : 0.0f;
+			jammed = m_StuckTime >= RageStuckTime;
+		}
+
+		// Latch "go around" when we hit something, and hold it briefly after it clears so the arc finishes before we
+		// cut back to the path (otherwise we'd straighten too early and drive straight back into it).
+		if (jammed || entityBlocking)
+		{
+			m_RageGoAround = true;
+			m_GoAroundHold = 0.3f;
+		}
+		else if (m_RageGoAround)
+		{
+			m_GoAroundHold -= Time.Delta;
+
+			if (m_GoAroundHold <= 0.0f)
+				m_RageGoAround = false;
+		}
+
+		// On a fresh jam, reverse to make room and flip to probe the other side next.
+		if (jammed && !m_RageReversing)
+		{
+			m_RageReversing = true;
+			m_ReverseTime = 0.0f;
+			m_StuckTime = 0.0f;
+			m_RageSwerve = -m_RageSwerve;
+		}
+
+		if (m_RageReversing)
+		{
+			m_ReverseTime += Time.Delta;
+
+			if (m_ReverseTime >= RageReverseDuration)
+				m_RageReversing = false;
+
+			m_Car.AiThrottle = -1.0f;
+			m_Car.AiSteer = 0.0f;   // back straight to open up room; the forward arc does the going-around
+			m_Car.AiHandbrake = false;
+			m_SpeedScale = 0.0f;
+			return;
+		}
+
+		// Forward: steer toward the path — but when avoiding/clearing something, push that target hard out to our
+		// chosen side so we arc around it rather than straight into it.
+		Vector3 target = m_Path[m_Target];
+
+		if (m_RageGoAround)
+		{
+			Vector3 side = (Rotation.FromYaw(90.0f) * m_Heading).WithZ(0.0f);
+
+			if (!side.IsNearZeroLength)
+				target += side.Normal * (m_RageSwerve * RageAroundClearance);
+		}
+
+		m_Car.AiThrottle = ((m_Lane.SpeedLimit - forwardSpeed) * ThrottleGain).Clamp(0.3f, 1.0f);
+		m_Car.AiSteer = SteerToward(target);
+		m_Car.AiHandbrake = false;
+		m_SpeedScale = 1.0f;
+	}
+
+
+
+	// Highest speed we can safely be doing right now given the curvature coming up on the path. For each bend ahead
+	// we work out a corner speed from the grip budget (v = √(grip·radius)) and the speed we could still be at and
+	// brake down to it in time (v = √(corner² + 2·decel·distance)); the lowest of those is our cap. Straights don't
+	// limit anything. The look-ahead is sized to our own braking distance so we always spot a bend early enough.
+	private float CorneringSpeedLimit(float _Speed)
+	{
+		float lookahead = (_Speed * _Speed / (2.0f * BrakeDecel) + 100.0f).Clamp(150.0f, 2000.0f);
+		float limit = float.MaxValue;
+		float dist = 0.0f;
+
+		Vector3 prev = m_Pos;
+
+		for (int i = m_Target; i < m_Path.Count && dist < lookahead; i++)
+		{
+			Vector3 cur = m_Path[i];
+			dist += Vector3.DistanceBetween(prev.WithZ(0.0f), cur.WithZ(0.0f));
+
+			if (i + 1 < m_Path.Count)
+			{
+				Vector3 d1 = (cur - prev).WithZ(0.0f);
+				Vector3 d2 = (m_Path[i + 1] - cur).WithZ(0.0f);
+
+				if (!d1.IsNearZeroLength && !d2.IsNearZeroLength)
+				{
+					float angle = MathF.Acos(Vector3.Dot(d1.Normal, d2.Normal).Clamp(-1.0f, 1.0f));
+					float arc = (d1.Length + d2.Length) * 0.5f;
+					float curvature = arc > 1.0f ? angle / arc : 0.0f;
+
+					if (curvature > 0.0001f)
+					{
+						float cornerSpeed = MathF.Sqrt(MaxCorneringAccel / curvature);
+						float allowed = MathF.Sqrt(cornerSpeed * cornerSpeed + 2.0f * BrakeDecel * dist);
+						limit = MathF.Min(limit, allowed);
+					}
+				}
+			}
+
+			prev = cur;
+		}
+
+		return limit;
+	}
+
+
+
+	// 1.0 when we're tracking our lane; ramps down (to 0.4) as the car drifts off the current path segment, so an
+	// already-sliding car eases off to recover its line rather than carrying the mistake further.
+	private float LaneDeviationSpeedFactor()
+	{
+		if (m_Target <= 0 || m_Target >= m_Path.Count)
+			return 1.0f;
+
+		Vector3 pa = m_Path[m_Target - 1].WithZ(0.0f);
+		Vector3 pb = m_Path[m_Target].WithZ(0.0f);
+		Vector3 ab = pb - pa;
+
+		if (ab.IsNearZeroLength)
+			return 1.0f;
+
+		Vector3 ap = m_Pos.WithZ(0.0f) - pa;
+		float t = (Vector3.Dot(ap, ab) / ab.LengthSquared).Clamp(0.0f, 1.0f);
+		float deviation = (m_Pos.WithZ(0.0f) - (pa + ab * t)).Length;
+
+		float laneWidth = m_Lane?.LaneWidth ?? 100.0f;
+		float start = laneWidth;
+		float full = laneWidth * 3.0f;
+
+		if (deviation <= start)
+			return 1.0f;
+
+		float k = ((deviation - start) / MathF.Max(1.0f, full - start)).Clamp(0.0f, 1.0f);
+		return float.Lerp(1.0f, 0.4f, k);
+	}
+
+
+
 	// Returns 1 (full speed) when the road ahead is clear, ramping down to 0 (stopped) as the nearest obstacle —
 	// another vehicle in the same lane, tagged entity, or a red traffic light — closes within range.
 	private float ComputeSpeedScale()
@@ -218,7 +668,7 @@ public sealed class TrafficVehicle : Component
 		// Two brakes only: the gap to whatever's ahead on our own path, and the intersection-entry decision.
 		// There is deliberately NO in-junction yielding — once a vehicle is engaged it always drives through,
 		// so it can never stop dead in the middle. All conflicts are resolved at the entry line instead.
-		float gapScale = ComputeGapScale(MathF.Min(NearestVehicleAhead(), NearestEntityAhead()));
+		float gapScale = ComputeGapScale(MathF.Min(NearestVehicleAhead(), m_EntityAhead));
 		float scale = MathF.Min(gapScale, IntersectionApproachScale());
 		return MathF.Min(scale, UTurnApproachScale());
 	}
@@ -266,7 +716,15 @@ public sealed class TrafficVehicle : Component
 		if (upcoming is null)
 			return 1.0f;
 
-		float approachDist = Spacing * 3.5f;
+		// A roundabout has no crossings — entry is purely a merge onto the ring, which the in-box right-of-way
+		// rules handle as the vehicle reaches the merge point. So skip the crossing-intersection approach gate.
+		if (upcoming.IsRoundabout)
+			return 1.0f;
+
+		// Stop this far short of the lane end (the junction edge) so momentum doesn't carry us over the line/crosswalk;
+		// the braking ramp then runs over a fixed zone ending at that stop point.
+		float stopDist = StopMargin;
+		float approachDist = stopDist + Spacing * 3.5f;
 		float distToEnd = DistanceToLaneEnd();
 
 		if (distToEnd > approachDist)
@@ -291,8 +749,6 @@ public sealed class TrafficVehicle : Component
 
 		if (!shouldYield)
 			return 1.0f;
-
-		float stopDist = Spacing * 0.25f;
 
 		if (distToEnd <= stopDist)
 			return 0.0f;
@@ -549,12 +1005,14 @@ public sealed class TrafficVehicle : Component
 			if (gap > Spacing)
 				continue;
 
-			// Same lane → we're following the leader on our exact path: always brake. Different lane in our
-			// corridor → a conflict (crossing OR merging onto a shared exit): brake only when we must yield.
-			// The priority car never brakes for the lower-priority one, so a conflict can't freeze or clip.
-			bool sameLane = ReferenceEquals(other.ActiveLane, m_Lane);
+			// Following the leader on our path → always brake. That's the leader on our exact lane, or one that's
+			// already moved onto the lane we're about to enter (our successor) — e.g. the next arc of a roundabout
+			// ring, so following continues seamlessly across lane boundaries. A different lane that ISN'T our
+			// successor is a conflict (crossing OR merging): brake only when we must yield.
+			bool following = ReferenceEquals(other.ActiveLane, m_Lane)
+				|| (m_Lane is not null && m_Lane.Successors.Contains(other.ActiveLane));
 
-			if (!sameLane && !ShouldYieldTo(other))
+			if (!following && !ShouldYieldTo(other))
 				continue;
 
 			if (gap < nearest)
@@ -621,11 +1079,19 @@ public sealed class TrafficVehicle : Component
 	// means the flat road/sidewalk meshes are never hit — only players/NPCs/whatever carries one of the tags.
 	private float NearestEntityAhead()
 	{
+		m_EntityAheadIsAiCar = false;
+
 		if (AwareTags == null || AwareTags.IsEmpty)
 			return float.MaxValue;
+		
+		// Swing the look direction toward where we're steering, so the sweep covers the turn we're taking.
+		Vector3 lookDir = m_Heading;
 
-		Vector3 from = WorldPosition;
-		Vector3 to = from + m_Heading * Spacing;
+		if (m_Car.IsValid() && m_Car.IsAiControlled)
+			lookDir = Rotation.FromYaw(m_Car.AiSteer * m_Car.GetMaxSteering()) * lookDir;
+		
+		Vector3 from = WorldPosition + m_Heading * m_FrontExtent; // start at the front bumper
+		Vector3 to = from + lookDir * Spacing * 0.5f;
 
 		SceneTraceResult trace = Scene.Trace
 			.Sphere(DetectRadius, from, to)
@@ -633,7 +1099,20 @@ public sealed class TrafficVehicle : Component
 			.IgnoreGameObjectHierarchy(GameObject)
 			.Run();
 
-		return trace.Hit ? trace.Distance : float.MaxValue;
+		DebugOverlay.Trace(trace);
+		
+		if (!trace.Hit)
+			return float.MaxValue;
+
+		// Still brake for whatever we hit — but flag when it's another AI-driven traffic car so the road-rage
+		// machine can ignore it. Otherwise a car queued behind others at a red light would decide it's being
+		// blocked on purpose and "lose patience". A managed NPC car has a TrafficVehicle whose CarController is
+		// AI-controlled; a player's car — driven OR parked in the road — has neither, so it can still provoke rage.
+		var otherCar = trace.GameObject.GetComponentInParent<CarController>();
+		var otherVehicle = trace.GameObject.GetComponentInParent<TrafficVehicle>();
+		m_EntityAheadIsAiCar = otherVehicle.IsValid() && otherCar.IsValid() && otherCar.IsAiControlled;
+		
+		return trace.Distance;
 	}
 
 
