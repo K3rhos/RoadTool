@@ -18,7 +18,7 @@ public sealed class TrafficVehicle : Component
 	public float DefaultSpeed { get; set; } = 200.0f;
 
 	/// <summary>Desired following gap; the vehicle brakes for anything ahead within this distance.</summary>
-	public float Spacing { get; set; } = 180.0f;
+	public float Spacing { get; set { field = value.Clamp(10.0f, 1000.0f); } } = 180.0f;
 
 	/// <summary>Shared list of all live vehicles (owned by the manager) used for collision awareness.</summary>
 	public List<TrafficVehicle> Neighbors { get; set; }
@@ -50,6 +50,26 @@ public sealed class TrafficVehicle : Component
 	/// <summary>False when effectively stopped (red light, queued). Lets others ignore us as a non-threat.</summary>
 	public bool IsMoving => m_SpeedScale > 0.05f;
 
+	/// <summary>The lane this vehicle is currently driving (road, intersection cross-lane, or return lane mid-U-turn).</summary>
+	public TrafficLane ActiveLane => m_Lane;
+
+	/// <summary>True while physically turning around on a dead-end U-turn arc (i.e. passing through the merge).</summary>
+	public bool IsTurningAround => m_UsingUTurnArc && m_Target <= m_ConnectorEnd;
+
+	/// <summary>The return lane this vehicle is about to U-turn onto while still approaching the dead end; else null.</summary>
+	public TrafficLane PendingUTurnReturn =>
+		(m_Lane?.UTurnArc is { Count: >= 2 } && m_Target > m_ConnectorEnd && m_Lane.Successors.Count > 0)
+			? m_Lane.Successors[0]
+			: null;
+
+	/// <summary>Distance from the pivot to the back of the car body, along its forward axis (0 if it has no model).</summary>
+	public float RearExtent => m_RearExtent;
+
+	/// <summary>The intersection cross-lane we're driving (if in the box) or committed to (if approaching); else null.</summary>
+	public TrafficLane CurrentOrPlannedCrossLane =>
+		CurrentIntersection is not null ? m_Lane
+		: (m_PlannedNext is { IsRoadLane: false } ? m_PlannedNext : null);
+
 	private TrafficLane m_Lane;
 	private List<Vector3> m_Path = new();
 	private int m_Target;
@@ -58,6 +78,10 @@ public sealed class TrafficVehicle : Component
 	private Vector3 m_Heading = Vector3.Forward;
 	private float m_SpeedScale = 1.0f;
 	private TrafficLane m_PlannedNext;
+	private bool m_UsingUTurnArc;
+	private int m_Id;
+	private float m_FrontExtent;
+	private float m_RearExtent;
 	private System.Random m_Rng;
 
 
@@ -67,6 +91,7 @@ public sealed class TrafficVehicle : Component
 	{
 		Graph = _Graph;
 		m_Rng = new System.Random(_Seed);
+		m_Id = _Seed;
 
 		SetPath(new List<Vector3>(_Lane.Waypoints), _Lane, 0);
 
@@ -80,6 +105,50 @@ public sealed class TrafficVehicle : Component
 
 		WorldPosition = m_Pos + Vector3.Up * HoverHeight;
 		WorldRotation = Rotation.LookAt(m_Heading, Vector3.Up);
+
+		ComputeForwardExtents();
+	}
+
+
+
+	// Measures how far the car body reaches ahead of and behind its pivot, along its own forward axis, from the
+	// model bounds. Lets the following gap be bumper-to-bumper instead of pivot-to-pivot. Stays 0 with no model,
+	// which falls back to the original pivot-based behaviour.
+	private void ComputeForwardExtents()
+	{
+		m_FrontExtent = 0.0f;
+		m_RearExtent = 0.0f;
+
+		float minX = float.MaxValue;
+		float maxX = float.MinValue;
+
+		foreach (var renderer in GetComponentsInChildren<ModelRenderer>(true))
+		{
+			if (renderer.Model is null)
+				continue;
+
+			BBox bounds = renderer.Model.Bounds;
+
+			// Project every corner of the model bounds into our local frame (forward = +X) so the result is
+			// correct even if the renderer is an offset/rotated child of the vehicle root.
+			for (int i = 0; i < 8; i++)
+			{
+				Vector3 corner = new Vector3(
+					(i & 1) == 0 ? bounds.Mins.x : bounds.Maxs.x,
+					(i & 2) == 0 ? bounds.Mins.y : bounds.Maxs.y,
+					(i & 4) == 0 ? bounds.Mins.z : bounds.Maxs.z);
+
+				Vector3 local = WorldTransform.PointToLocal(renderer.WorldTransform.PointToWorld(corner));
+				minX = MathF.Min(minX, local.x);
+				maxX = MathF.Max(maxX, local.x);
+			}
+		}
+
+		if (maxX < minX)
+			return; // no model renderer found — keep pivot-based behaviour
+
+		m_FrontExtent = MathF.Max(0.0f, maxX);
+		m_RearExtent = MathF.Max(0.0f, -minX);
 	}
 
 
@@ -150,7 +219,8 @@ public sealed class TrafficVehicle : Component
 		// There is deliberately NO in-junction yielding — once a vehicle is engaged it always drives through,
 		// so it can never stop dead in the middle. All conflicts are resolved at the entry line instead.
 		float gapScale = ComputeGapScale(MathF.Min(NearestVehicleAhead(), NearestEntityAhead()));
-		return MathF.Min(gapScale, IntersectionApproachScale());
+		float scale = MathF.Min(gapScale, IntersectionApproachScale());
+		return MathF.Min(scale, UTurnApproachScale());
 	}
 
 
@@ -228,6 +298,75 @@ public sealed class TrafficVehicle : Component
 			return 0.0f;
 
 		return ((distToEnd - stopDist) / (approachDist - stopDist)).Clamp(0.0f, 1.0f);
+	}
+
+
+
+	// Dead-end turn-around merge gate. Where two same-direction lanes both U-turn onto a single return lane, they
+	// converge to one point — so they must take turns. Hold at the dead end until the merge is clear and no other
+	// turner has priority; then commit and complete the arc in one motion (never stall halfway through it).
+	private float UTurnApproachScale()
+	{
+		// Only while still approaching the dead end on a lane that turns around (not once committed to the arc).
+		if (m_Lane is null || m_Lane.UTurnArc is not { Count: >= 2 } || m_Lane.Successors.Count == 0)
+			return 1.0f;
+
+		if (m_Target <= m_ConnectorEnd || Neighbors is null)
+			return 1.0f;
+
+		TrafficLane returnLane = m_Lane.Successors[0];
+		Vector3 mergePoint = m_Lane.UTurnArc[m_Lane.UTurnArc.Count - 1];
+
+		float approachDist = Spacing * 2.0f;
+		float distToEnd = DistanceToLaneEnd();
+
+		if (distToEnd > approachDist)
+			return 1.0f;
+
+		if (!UTurnMergeBusy(returnLane, mergePoint))
+			return 1.0f;
+
+		float stopDist = Spacing * 0.3f;
+
+		if (distToEnd <= stopDist)
+			return 0.0f;
+
+		return ((distToEnd - stopDist) / (approachDist - stopDist)).Clamp(0.0f, 1.0f);
+	}
+
+
+
+	private bool UTurnMergeBusy(TrafficLane _ReturnLane, Vector3 _MergePoint)
+	{
+		float mergeRadius = MathF.Max(m_Lane.LaneWidth, m_Lane.RoadHalfWidth * 0.6f);
+		float myDist = WorldPosition.Distance(_MergePoint);
+
+		foreach (var other in Neighbors)
+		{
+			if (other == this || !other.IsValid())
+				continue;
+
+			float otherDist = other.WorldPosition.Distance(_MergePoint);
+
+			// Someone already committed to turning around onto this return lane occupies the merge for the whole
+			// arc — wait, no matter where on the arc they are, so we don't both converge on the same point.
+			if (other.IsTurningAround && other.ActiveLane == _ReturnLane)
+				return true;
+
+			// …or has just merged and is still sitting near the start of the return lane.
+			if (other.ActiveLane == _ReturnLane && otherDist < mergeRadius)
+				return true;
+
+			// Another car waiting to make the SAME U-turn that's nearer the merge goes first (ties break by id).
+			// Strict ordering ⇒ two simultaneous arrivals never both yield, so they can't deadlock.
+			if (other.PendingUTurnReturn == _ReturnLane)
+			{
+				if (otherDist < myDist - 1.0f || (MathF.Abs(otherDist - myDist) <= 1.0f && other.m_Id > m_Id))
+					return true;
+			}
+		}
+
+		return false;
 	}
 
 
@@ -373,10 +512,11 @@ public sealed class TrafficVehicle : Component
 
 
 
-	// Nearest vehicle ahead that we should follow. The key filter is heading agreement: we only brake for
-	// vehicles travelling roughly the same way. This keeps a clean following distance from the road all the
-	// way through an intersection (the leader keeps its heading), while perpendicular crossing traffic is
-	// ignored — those conflicts are resolved at the intersection entry, never by stopping in the middle.
+	// Nearest vehicle ahead that we must brake for. A car is "ahead" when it sits in a tight corridor in front
+	// of us (so cars in other lanes are ignored). For a car going the same way it's normal following. For a
+	// crossing/opposing car it's a conflict, and only the lower-priority side yields (ShouldYieldTo): priority
+	// goes to whoever is deeper into the junction, who is therefore always *ahead* — so the yielder (behind) is
+	// the only one that brakes, the priority car drives clear, and the two can neither freeze nor phase through.
 	private float NearestVehicleAhead()
 	{
 		if (Neighbors is null)
@@ -391,14 +531,10 @@ public sealed class TrafficVehicle : Component
 			if (other == this || !other.IsValid())
 				continue;
 
-			// Same-direction only: ignores oncoming (dot < 0) and perpendicular crossers (dot ≈ 0).
-			if (Vector3.Dot(other.Heading, m_Heading) < 0.5f)
-				continue;
-
 			Vector3 toOther = other.WorldPosition - WorldPosition;
 			float forward = Vector3.Dot(toOther, m_Heading);
 
-			if (forward <= 0.0f || forward > Spacing)
+			if (forward <= 0.0f)
 				continue;
 
 			float lateral = (toOther - m_Heading * forward).Length;
@@ -406,11 +542,77 @@ public sealed class TrafficVehicle : Component
 			if (lateral > lateralLimit)
 				continue;
 
-			if (forward < nearest)
-				nearest = forward;
+			// Real bumper-to-bumper gap: pivot distance minus our front overhang and the other car's rear
+			// overhang, so a long car is kept clear instead of being driven through. Extents are 0 with no model.
+			float gap = MathF.Max(0.0f, forward - m_FrontExtent - other.RearExtent);
+
+			if (gap > Spacing)
+				continue;
+
+			// Same lane → we're following the leader on our exact path: always brake. Different lane in our
+			// corridor → a conflict (crossing OR merging onto a shared exit): brake only when we must yield.
+			// The priority car never brakes for the lower-priority one, so a conflict can't freeze or clip.
+			bool sameLane = ReferenceEquals(other.ActiveLane, m_Lane);
+
+			if (!sameLane && !ShouldYieldTo(other))
+				continue;
+
+			if (gap < nearest)
+				nearest = gap;
 		}
 
 		return nearest;
+	}
+
+
+
+	// Deterministic right-of-way between two vehicles on conflicting paths: exactly one yields, so they never
+	// deadlock. Both rules pick the car that reaches the conflict first — which is always the one *ahead* — so
+	// the yielder is always behind it and can actually stop (never a freeze, never a clip).
+	private bool ShouldYieldTo(TrafficVehicle _Other)
+	{
+		TrafficLane mine = CurrentOrPlannedCrossLane;
+		TrafficLane theirs = _Other.CurrentOrPlannedCrossLane;
+
+		if (mine is not null && theirs is not null && !ReferenceEquals(mine, theirs))
+		{
+			// Merging onto a shared exit (e.g. a right turn and a left turn both feeding the same lane): whoever
+			// is nearer that exit takes it first. The shorter movement reaches it first, as expected.
+			Vector3 exit = mine.EndPos;
+
+			if (exit.DistanceSquared(theirs.EndPos) < 3600.0f) // ~60u apart → same exit lane
+			{
+				float myToExit = WorldPosition.DistanceSquared(exit);
+				float otherToExit = _Other.WorldPosition.DistanceSquared(exit);
+
+				if (MathF.Abs(myToExit - otherToExit) > 1.0f)
+					return otherToExit < myToExit;
+			}
+			// Crossing paths (e.g. a left turn cutting across oncoming straight traffic): whoever is nearer the
+			// actual point where the two paths cross goes first; the other, being behind it, yields and can stop.
+			else if (mine.Conflicts.TryGetValue(theirs, out Vector3 crossing))
+			{
+				float myToCross = WorldPosition.DistanceSquared(crossing);
+				float otherToCross = _Other.WorldPosition.DistanceSquared(crossing);
+
+				if (MathF.Abs(myToCross - otherToCross) > 1.0f)
+					return otherToCross < myToCross;
+			}
+		}
+
+		// Fallback: whoever is deeper into the junction (nearer its centre) clears first.
+		RoadIntersectionComponent junction = CurrentIntersection ?? _Other.CurrentIntersection;
+
+		if (junction is not null)
+		{
+			float myDist = WorldPosition.DistanceSquared(junction.WorldPosition);
+			float otherDist = _Other.WorldPosition.DistanceSquared(junction.WorldPosition);
+
+			if (MathF.Abs(myDist - otherDist) > 1.0f)
+				return otherDist < myDist;
+		}
+
+		return _Other.m_Id > m_Id;
 	}
 
 
@@ -452,8 +654,9 @@ public sealed class TrafficVehicle : Component
 		}
 
 		List<Vector3> connector;
+		bool usingUTurnArc = m_Lane.UTurnArc is { Count: >= 2 };
 
-		if (m_Lane.UTurnArc is { Count: >= 2 })
+		if (usingUTurnArc)
 		{
 			// Dead-end turn-around: follow the contained on-road arc instead of looping past the road end.
 			connector = m_Lane.UTurnArc;
@@ -475,6 +678,9 @@ public sealed class TrafficVehicle : Component
 
 		// Segments up to the connector's last point run at DefaultSpeed; the rest run at next.SpeedLimit.
 		SetPath(path, next, connector.Count - 1);
+
+		// Remember whether we're mid turn-around so others can tell we're occupying the merge.
+		m_UsingUTurnArc = usingUTurnArc;
 	}
 
 

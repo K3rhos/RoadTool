@@ -16,7 +16,7 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 
 	[Property(Title = "Prefab"), Feature("Traffic"), Category("Vehicles")] private GameObject VehiclePrefab { get; set; }
 	[Property, Feature("Traffic"), Category("Vehicles"), Range(0, 500)] private int VehicleCount { get; set { field = value; m_IsDirty = true; } } = 30;
-	[Property(Title = "Default Speed"), Feature("Traffic"), Category("Vehicles"), Range(5.0f, 130.0f)] private float DefaultSpeed { get; set; } = 20.0f;
+	[Property(Title = "Default Speed"), Feature("Traffic"), Category("Vehicles"), Range(5.0f, 130.0f)] private float DefaultSpeed { get; set; } = 30.0f;
 	[Property(Title = "Following Gap"), Feature("Traffic"), Category("Vehicles"), Range(50.0f, 600.0f)] private float VehicleSpacing { get; set; } = 180.0f;
 	[Property(Title = "Height Offset"), Feature("Traffic"), Category("Vehicles"), Range(0.0f, 300.0f)] private float HoverHeight { get; set; } = 45.0f;
 

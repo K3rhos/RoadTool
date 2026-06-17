@@ -53,6 +53,10 @@ public sealed class TrafficLane
 	/// <summary>Lanes that can be entered after finishing this one.</summary>
 	public readonly List<TrafficLane> Successors = new();
 
+	/// <summary>For cross-lanes: other cross-lanes whose path crosses this one, mapped to the crossing point.
+	/// Lets vehicles resolve right-of-way by who is nearer the actual conflict point.</summary>
+	public readonly Dictionary<TrafficLane, Vector3> Conflicts = new();
+
 	public Vector3 StartPos => Waypoints[0];
 	public Vector3 EndPos => Waypoints[^1];
 
@@ -214,6 +218,8 @@ public sealed class RoadTrafficGraph
 				outgoing[e] = CollectExitLanes(pos, outward, right, threshold, _IsIncoming: false);
 			}
 
+			var crossLanes = new List<TrafficLane>();
+
 			for (int i = 0; i < n; i++)
 			{
 				if (incoming[i].Count == 0)
@@ -232,12 +238,85 @@ public sealed class RoadTrafficGraph
 						TrafficLane cross = BuildCrossLane(src, dst, center, intersection, _Settings.WaypointSpacing);
 						cross.SpeedLimit = intersectionSpeed;
 						Lanes.Add(cross);
+						crossLanes.Add(cross);
 					}
 				}
 			}
 
+			ComputeCrossLaneConflicts(crossLanes);
+
 			IntersectionCount++;
 		}
+	}
+
+
+
+	// For every pair of this intersection's cross-lanes that genuinely CROSS (not ones that share an entry and
+	// diverge, nor ones that share an exit and merge), record where their paths intersect. Vehicles then resolve
+	// right-of-way by who is nearer that point — the one ahead clears, the one behind yields and can stop.
+	private static void ComputeCrossLaneConflicts(List<TrafficLane> _CrossLanes)
+	{
+		const float sameSqr = 3600.0f; // ~60u: shared entry/exit endpoints
+
+		for (int a = 0; a < _CrossLanes.Count; a++)
+		{
+			for (int b = a + 1; b < _CrossLanes.Count; b++)
+			{
+				TrafficLane A = _CrossLanes[a];
+				TrafficLane B = _CrossLanes[b];
+
+				if (A.StartPos.DistanceSquared(B.StartPos) < sameSqr)
+					continue; // same entry → diverge, never cross
+
+				if (A.EndPos.DistanceSquared(B.EndPos) < sameSqr)
+					continue; // same exit → merge, handled separately
+
+				if (TryFindPathCrossing(A.Waypoints, B.Waypoints, out Vector3 point))
+				{
+					A.Conflicts[B] = point;
+					B.Conflicts[A] = point;
+				}
+			}
+		}
+	}
+
+
+
+	private static bool TryFindPathCrossing(List<Vector3> _A, List<Vector3> _B, out Vector3 _Point)
+	{
+		for (int i = 0; i < _A.Count - 1; i++)
+		{
+			for (int j = 0; j < _B.Count - 1; j++)
+			{
+				if (SegmentsCross(_A[i], _A[i + 1], _B[j], _B[j + 1], out _Point))
+					return true;
+			}
+		}
+
+		_Point = default;
+		return false;
+	}
+
+
+
+	// 2D (XY) segment-segment intersection. Returns the crossing point if the segments properly cross.
+	private static bool SegmentsCross(Vector3 _P1, Vector3 _P2, Vector3 _P3, Vector3 _P4, out Vector3 _Point)
+	{
+		_Point = default;
+
+		float d = (_P2.x - _P1.x) * (_P4.y - _P3.y) - (_P2.y - _P1.y) * (_P4.x - _P3.x);
+
+		if (MathF.Abs(d) < 1e-5f)
+			return false; // parallel
+
+		float t = ((_P3.x - _P1.x) * (_P4.y - _P3.y) - (_P3.y - _P1.y) * (_P4.x - _P3.x)) / d;
+		float u = ((_P3.x - _P1.x) * (_P2.y - _P1.y) - (_P3.y - _P1.y) * (_P2.x - _P1.x)) / d;
+
+		if (t < 0.0f || t > 1.0f || u < 0.0f || u > 1.0f)
+			return false;
+
+		_Point = _P1 + (_P2 - _P1) * t;
+		return true;
 	}
 
 

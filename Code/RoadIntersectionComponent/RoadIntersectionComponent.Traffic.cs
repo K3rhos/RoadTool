@@ -22,7 +22,7 @@ public partial class RoadIntersectionComponent
 	[Property, Feature("General"), Category("Traffic"), Order(2)] public bool ExcludeTraffic { get; set; } = false;
 
 	/// <summary>Speed limit for traffic crossing this intersection, in km/h.</summary>
-	[Property, Feature("General"), Category("Traffic"), Order(2), Range(5.0f, 130.0f)] public float SpeedLimit { get; set; } = 20.0f;
+	[Property, Feature("General"), Category("Traffic"), Order(2), Range(5.0f, 130.0f)] public float SpeedLimit { get; set; } = 30.0f;
 
 
 
