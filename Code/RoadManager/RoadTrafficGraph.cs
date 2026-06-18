@@ -718,16 +718,15 @@ public sealed class RoadTrafficGraph
 
 		Vector3 side = sideRaw / spacing;
 
-		// Pull both lane ends back along each lane's own 3-D travel axis, so the trimmed ends stay ON the sloped road
-		// surface (at the right height) instead of at the original dead end's height — otherwise the loop lifts off
-		// wherever the road climbs or dips.
-		TrimTail(_Approach, margin, _Approach.EndPos - endDir.Normal * margin);
+		// Pull both lane ends back by `margin` of arc length, following each lane's polyline so the trimmed ends stay
+		// ON the road surface (even over a crest or dip) — a straight-line pull-back would float off a curved road.
+		TrimTail(_Approach, margin);
 
 		if (_TrimmedHeads.Add(_Exit))
-			TrimHead(_Exit, margin, _Exit.StartPos + _Exit.StartDir.Normal * margin);
+			TrimHead(_Exit, margin);
 
-		Vector3 pf = _Approach.EndPos;   // actual trimmed dead-end of the approach lane
-		Vector3 pb = _Exit.StartPos;     // actual trimmed start of the return lane
+		Vector3 pf = _Approach.EndPos;   // actual trimmed dead-end of the approach lane (on the surface)
+		Vector3 pb = _Exit.StartPos;     // actual trimmed start of the return lane (on the surface)
 		Vector3 mid = (pf + pb) * 0.5f;
 
 		Vector3 bulb = mid + outward * forward;                       // bulb (body) circle centre
@@ -758,19 +757,37 @@ public sealed class RoadTrafficGraph
 
 		AppendBezier(arc, rightTangent, rightTangent + bodyOut * flareOut, pb - exitDir * flareOut, pb, BulbFlareSegments);
 
-		// The footprint above is laid out flat; drape it onto the road's grade. Each point's height rises with how far
-		// it sits forward (the road slope) and to the side (any height difference between the two lane ends), so the
-		// loop follows the incline instead of hovering. Endpoints are pinned exactly so it meets the lanes with no step.
-		float horizontal = MathF.Max(0.001f, endDir.WithZ(0.0f).Length);
-		float slopeForward = endDir.z / horizontal;                                  // road grade along travel (rise / run)
-		float slopeLateral = spacing > 1.0f ? (pb.z - pf.z) / spacing : 0.0f;         // tilt across the two lane ends
+		// The footprint above is laid out flat; drape it onto the ACTUAL road surface so it follows the real vertical
+		// profile — crest, sag, ramp — instead of a straight grade that flies off where the road curves. We sample the
+		// owning road's centerline and snap each point to the surface height directly beneath it.
+		List<Vector3> centerline = null;
 
-		for (int i = 0; i < arc.Count; i++)
+		if (_Approach.Owner is RoadComponent road && road.IsValid())
 		{
-			Vector3 d = (arc[i] - mid).WithZ(0.0f);
-			arc[i] = arc[i].WithZ(mid.z + slopeForward * Vector3.Dot(d, outward) + slopeLateral * Vector3.Dot(d, side));
+			centerline = new List<Vector3>();
+			road.GetTrafficCenterline(64.0f, centerline, new List<Vector3>());
 		}
 
+		if (centerline is { Count: >= 2 })
+		{
+			for (int i = 0; i < arc.Count; i++)
+				arc[i] = arc[i].WithZ(RoadHeightAt(centerline, arc[i]));
+		}
+		else
+		{
+			// Fallback (no road surface to sample): a straight grade from the lane-end slope.
+			float horizontal = MathF.Max(0.001f, endDir.WithZ(0.0f).Length);
+			float slopeForward = endDir.z / horizontal;
+			float slopeLateral = spacing > 1.0f ? (pb.z - pf.z) / spacing : 0.0f;
+
+			for (int i = 0; i < arc.Count; i++)
+			{
+				Vector3 d = (arc[i] - mid).WithZ(0.0f);
+				arc[i] = arc[i].WithZ(mid.z + slopeForward * Vector3.Dot(d, outward) + slopeLateral * Vector3.Dot(d, side));
+			}
+		}
+
+		// Pin the endpoints exactly to the (already on-surface) lane ends so the loop meets the lanes with no step.
 		arc[0] = pf;
 		arc[^1] = pb;
 
@@ -796,17 +813,14 @@ public sealed class RoadTrafficGraph
 		if (Vector3.DistanceBetween(_Approach.StartPos, _Approach.EndPos) < margin * 2.0f)
 			margin *= 0.5f;
 
-		Vector3 pf = _Approach.EndPos - outward * margin;
-		TrimTail(_Approach, margin, pf);
+		TrimTail(_Approach, margin);
 
 		// Pull the return lane's head back by the same amount so both ends of the loop start level — otherwise the
 		// arc hooks sharply at the un-trimmed end. Only do it once even if several lanes turn onto this one.
 		if (_TrimmedHeads.Add(_Exit))
-		{
-			Vector3 pbNew = _Exit.StartPos + _Exit.StartDir.Normal * margin;
-			TrimHead(_Exit, margin, pbNew);
-		}
+			TrimHead(_Exit, margin);
 
+		Vector3 pf = _Approach.EndPos;   // on the surface, `margin` of arc length back from the dead end
 		Vector3 pb = _Exit.StartPos;
 		Vector3 exitInward = _Exit.StartDir.Normal;
 
@@ -876,28 +890,80 @@ public sealed class RoadTrafficGraph
 
 
 
-	private static void TrimTail(TrafficLane _Lane, float _Margin, Vector3 _NewEnd)
+	// Surface height of the owning road directly under a query point: the nearest point on the road centerline (in
+	// plan view) with its height interpolated along that segment. Lets the U-turn loop sit on the real road surface
+	// even where the road climbs, dips or crests, instead of on a flat plane through the lane ends.
+	private static float RoadHeightAt(List<Vector3> _Centerline, Vector3 _Query)
 	{
-		var wps = _Lane.Waypoints;
-		Vector3 endPos = wps[^1];
+		float bestSqr = float.MaxValue;
+		float bestZ = _Query.z;
 
-		while (wps.Count > 2 && Vector3.DistanceBetween(wps[^1], endPos) < _Margin)
-			wps.RemoveAt(wps.Count - 1);
+		for (int i = 0; i < _Centerline.Count - 1; i++)
+		{
+			Vector3 a = _Centerline[i];
+			Vector3 b = _Centerline[i + 1];
+			Vector3 ab = (b - a).WithZ(0.0f);
+			float lenSqr = ab.LengthSquared;
+			float t = lenSqr > 0.0001f ? Math.Clamp(Vector3.Dot((_Query - a).WithZ(0.0f), ab) / lenSqr, 0.0f, 1.0f) : 0.0f;
 
-		wps[^1] = _NewEnd;
+			Vector3 proj = a + ab * t;
+			float dSqr = (_Query - proj).WithZ(0.0f).LengthSquared;
+
+			if (dSqr < bestSqr)
+			{
+				bestSqr = dSqr;
+				bestZ = float.Lerp(a.z, b.z, t);
+			}
+		}
+
+		return bestZ;
 	}
 
 
 
-	private static void TrimHead(TrafficLane _Lane, float _Margin, Vector3 _NewStart)
+	// Trims _Margin of ARC LENGTH off the tail, following the lane polyline so the new end is interpolated between two
+	// real surface waypoints — it therefore stays on the road, even over a crest or dip. (A straight-line pull-back
+	// would float off a curved road.)
+	private static void TrimTail(TrafficLane _Lane, float _Margin)
 	{
 		var wps = _Lane.Waypoints;
-		Vector3 startPos = wps[0];
+		float remaining = _Margin;
 
-		while (wps.Count > 2 && Vector3.DistanceBetween(wps[0], startPos) < _Margin)
+		while (wps.Count > 2)
+		{
+			float seg = Vector3.DistanceBetween(wps[^1], wps[^2]);
+
+			if (seg >= remaining)
+			{
+				wps[^1] = wps[^1] + (wps[^2] - wps[^1]) * (remaining / MathF.Max(seg, 0.0001f));
+				return;
+			}
+
+			remaining -= seg;
+			wps.RemoveAt(wps.Count - 1);
+		}
+	}
+
+
+
+	private static void TrimHead(TrafficLane _Lane, float _Margin)
+	{
+		var wps = _Lane.Waypoints;
+		float remaining = _Margin;
+
+		while (wps.Count > 2)
+		{
+			float seg = Vector3.DistanceBetween(wps[0], wps[1]);
+
+			if (seg >= remaining)
+			{
+				wps[0] = wps[0] + (wps[1] - wps[0]) * (remaining / MathF.Max(seg, 0.0001f));
+				return;
+			}
+
+			remaining -= seg;
 			wps.RemoveAt(0);
-
-		wps[0] = _NewStart;
+		}
 	}
 }
 

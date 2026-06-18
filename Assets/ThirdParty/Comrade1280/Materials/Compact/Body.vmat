@@ -28,7 +28,7 @@ Layer0
 	TextureMetalness "thirdparty/comrade1280/textures/compact/compact_metallic.png"
 
 	//---- Normal ----
-	TextureNormal "materials/default/default_normal.tga"
+	TextureNormal "thirdparty/comrade1280/textures/compact/compact_normal.png"
 
 	//---- Roughness ----
 	g_flRoughnessScaleFactor "1.000"

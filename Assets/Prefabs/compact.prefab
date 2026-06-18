@@ -171,7 +171,6 @@
             "GripMultiplier": 1,
             "Inverted": false,
             "IsPowered": true,
-            "IsUsing3DCollider": false,
             "MaxBrakeForce": 300,
             "MaxGripAngle": 0.3,
             "MaxSteeringAngle": 35,
@@ -184,6 +183,7 @@
             "OnComponentFixedUpdate": null,
             "OnComponentStart": null,
             "OnComponentUpdate": null,
+            "PhysicMethod": "ThreeDimensions",
             "SideFriction": {
               "ExtremumSlip": 0.5,
               "ExtremumValue": 640,
@@ -281,7 +281,6 @@
             "GripMultiplier": 1,
             "Inverted": true,
             "IsPowered": true,
-            "IsUsing3DCollider": false,
             "MaxBrakeForce": 300,
             "MaxGripAngle": 0.3,
             "MaxSteeringAngle": 35,
@@ -294,6 +293,7 @@
             "OnComponentFixedUpdate": null,
             "OnComponentStart": null,
             "OnComponentUpdate": null,
+            "PhysicMethod": "ThreeDimensions",
             "SideFriction": {
               "ExtremumSlip": 0.5,
               "ExtremumValue": 640,
@@ -391,7 +391,6 @@
             "GripMultiplier": 1,
             "Inverted": true,
             "IsPowered": false,
-            "IsUsing3DCollider": false,
             "MaxBrakeForce": 300,
             "MaxGripAngle": 0.3,
             "MaxSteeringAngle": 35,
@@ -404,6 +403,7 @@
             "OnComponentFixedUpdate": null,
             "OnComponentStart": null,
             "OnComponentUpdate": null,
+            "PhysicMethod": "ThreeDimensions",
             "SideFriction": {
               "ExtremumSlip": 0.5,
               "ExtremumValue": 640,
@@ -501,7 +501,6 @@
             "GripMultiplier": 1,
             "Inverted": false,
             "IsPowered": false,
-            "IsUsing3DCollider": false,
             "MaxBrakeForce": 300,
             "MaxGripAngle": 0.3,
             "MaxSteeringAngle": 35,
@@ -514,6 +513,7 @@
             "OnComponentFixedUpdate": null,
             "OnComponentStart": null,
             "OnComponentUpdate": null,
+            "PhysicMethod": "ThreeDimensions",
             "SideFriction": {
               "ExtremumSlip": 0.5,
               "ExtremumValue": 640,

@@ -7,7 +7,7 @@
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
     "Scale": "1,1,1",
-    "Tags": "",
+    "Tags": "vehicle",
     "Enabled": true,
     "NetworkMode": 2,
     "NetworkFlags": 0,

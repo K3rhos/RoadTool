@@ -5,11 +5,21 @@ namespace RedSnail.RoadTool;
 
 public sealed class Wheel : Component
 {
+	public enum WheelPhysic
+	{
+		[Title("1D"), Description("Better performance with a huge amount of vehicles, but its less accurate")]
+		Unidimensional,
+		
+		[Title("3D"), Description("More accurate but performance can be slighly worse than using 1D")]
+		ThreeDimensions
+	}
+	
 	private const float LOW_SPEED_THRESHOLD = 32.0f;
 	private const float SLIDE_THRESHOLD = 0.05f; // Slip threshold to detect sliding
 	
 	private ModelRenderer m_ModelRenderer;
 	private Rigidbody m_Rigidbody;
+	private CarController m_CarController;
 	
 	private SceneTraceResult m_GroundTrace;
 	private SceneTraceResult m_BackupGroundTrace;
@@ -45,7 +55,7 @@ public sealed class Wheel : Component
 	/// </summary>
 	public float SideSlip => m_CurrentSideSlip;
 	
-	[Property, Group("General"), Order(0)] private bool IsUsing3DCollider { get; set; } = false;
+	[Property, Group("General"), Order(0)] private WheelPhysic PhysicMethod { get; set; } = WheelPhysic.Unidimensional;
 	[Property, Group("General"), Order(0)] public bool IsPowered { get; set; } = false;
 	[Property, Group("General"), Order(0)] private float WheelRadius { get; set; } = 14.0f;
 	[Property, Group("General"), Order(0)] private float WheelWidth { get; set; } = 7.0f;
@@ -77,6 +87,7 @@ public sealed class Wheel : Component
 	{
 		m_ModelRenderer = GetComponentInChildren<ModelRenderer>();
 		m_Rigidbody = GetComponentInParent<Rigidbody>();
+		m_CarController = GetComponentInParent<CarController>();
 	}
 	
 	
@@ -85,8 +96,15 @@ public sealed class Wheel : Component
 	{
 		if (!m_Rigidbody.IsValid())
 			return;
-		
-		m_WantsToUse3DWheelColliders = IsUsing3DCollider && !m_Rigidbody.IsProxy;
+
+		if (m_CarController.IsValid())
+		{
+			m_WantsToUse3DWheelColliders = PhysicMethod == WheelPhysic.ThreeDimensions && !m_CarController.IsAiControlled && m_CarController.IsDriven;	
+		}
+		else
+		{
+			m_WantsToUse3DWheelColliders = PhysicMethod == WheelPhysic.ThreeDimensions;
+		}
 		
 		DoTrace();
 		UpdateModelRender();
@@ -343,14 +361,10 @@ public sealed class Wheel : Component
 		if (!IsGrounded)
 			return;
 		
-		if (m_GroundTrace.Tags.Contains("ped"))
-			return;
-		
+		// Both the 1D ray and the (lifted) 3D cylinder now measure the distance straight down from the wheel centre to
+		// the surface, so they share one rest length: max droop + the wheel radius, minus the min suspension length.
 		float suspensionTotalLength = (MaxSuspensionLength + WheelRadius) - MinSuspensionLength;
-		
-		if (m_WantsToUse3DWheelColliders)
-			suspensionTotalLength = MaxSuspensionLength - MinSuspensionLength;
-		
+
 		float suspensionCompression = -float.Abs(m_GroundTrace.Distance - suspensionTotalLength);
 		
 		// By default we use vehicle transform up for the suspension calculation
@@ -396,7 +410,7 @@ public sealed class Wheel : Component
 	    }
 	    else
 	    {
-		    // Really basic 1D ray trace physics (used for non-owned/non-driven vehicles)
+		    // Really basic 1D ray trace physics (used for non-owned/non-driven/ai traffic vehicles)
 		    Perform1DWheelTrace(startPos, down);
 	    }
 	    
@@ -407,11 +421,16 @@ public sealed class Wheel : Component
 	
 	private void Perform3DWheelTrace(Vector3 _StartPos, Vector3 _Down)
 	{
-		// Cylinder trace uses suspension length without the wheel radius
-		// (since the wheel radius is already taken into account in the cylinder radius)
+		// Start the wheel-shaped cylinder a wheel-radius ABOVE the wheel centre, then sweep down through the whole
+		// suspension range. Starting AT the centre (the old way) buried the cylinder's lower half in the ground as soon
+		// as the suspension travel was shorter than the wheel radius — so on a small car, or over any bump, the cast
+		// "started solid" and returned a useless zero-distance hit (or none). Lifting the start keeps the cast clean:
+		// the first contact is the bottom of the wheel touching the ground, and the distance then measures straight
+		// down from the centre to the surface — exactly like the 1D ray, so UpdateSuspension uses one length for both.
+		Vector3 cylinderStartPos = _StartPos - _Down * WheelRadius;
 		Vector3 cylinderEndPos = _StartPos + _Down * MaxSuspensionLength;
-		
-		SceneTrace cylinderTrace = CreateCylinderTrace(_StartPos, cylinderEndPos);
+
+		SceneTrace cylinderTrace = CreateCylinderTrace(cylinderStartPos, cylinderEndPos);
 
 		// Backup ray trace uses extended length when driven or grounded
 		// (since this is a 1D ray trace the wheel radius need to be taken into account here)
@@ -460,9 +479,9 @@ public sealed class Wheel : Component
 	        .IgnoreGameObjectHierarchy(GameObject)
 	        .WithoutTags("vehicle");
 	}
-	
-	
-	
+
+
+
 	private SceneTrace CreateCylinderTrace(Vector3 _Start, Vector3 _End)
 	{
 	    return Scene.Trace
@@ -476,6 +495,12 @@ public sealed class Wheel : Component
 	
 	private void DrawDebugTraces()
 	{
+		if (!Game.IsPlaying)
+			return;
+		
+		if (!RoadManager.Current.ShowLayoutOverlays)
+			return;
+		
 		if (Scene.Camera.IsValid()
 		    && Scene.Camera.WorldPosition.DistanceSquared(WorldPosition) > 1000000.0f
 		    || !Scene.Camera.GetFrustum(Scene.Camera.ScreenRect).IsInside(WorldPosition))

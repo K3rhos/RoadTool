@@ -20,8 +20,6 @@ public enum AIState
 /// </summary>
 public sealed class TrafficVehicle : Component
 {
-	private ModelRenderer m_ModelRenderer;
-	
 	public RoadTrafficGraph Graph { get; set; }
 	public float HoverHeight { get; set; } = 40.0f;
 	public float TurnRate { get; set; } = 6.0f;
@@ -53,6 +51,14 @@ public sealed class TrafficVehicle : Component
 
 	/// <summary>Current AI behaviour (Normal / RoadRage).</summary>
 	public AIState State => m_State;
+
+	/// <summary>
+	/// True while this brain is actually driving the car as an NPC: the component is active and no player has taken
+	/// the wheel. This is the single authority for "AI controlled" — the <see cref="CarController"/> just mirrors it,
+	/// and other vehicles read it to tell a managed NPC apart from a player's (stolen) car. An on-rails vehicle with
+	/// no controller is AI-controlled whenever it's active.
+	/// </summary>
+	public bool IsAiControlled => Active && !m_PlayerTookOver;
 
 	/// <summary>True while driving a road lane; false while crossing an intersection or connector.</summary>
 	public bool IsOnRoadLane => m_Lane?.IsRoadLane ?? true;
@@ -108,11 +114,11 @@ public sealed class TrafficVehicle : Component
 	private float m_FrontExtent;
 	private float m_RearExtent;
 	private CarController m_Car;
+	private bool m_PlayerTookOver;   // a player has driven this car → it's theirs now; the AI never reclaims it
 	private AIState m_State = AIState.Normal;
 	private float m_BlockedTime;     // seconds blocked by an entity (patience timer)
 	private float m_RoadRageTime;    // seconds of road rage left
 	private float m_EntityAhead = float.MaxValue; // cached distance to the nearest tagged entity this frame
-	private bool m_EntityAheadIsAiCar;            // …and whether that nearest entity is another AI traffic car (braked for, but ignored by the rage machine)
 	private float m_RageSwerve = 1.0f;            // which way (+1/-1) we lean while raging
 	private bool m_RageReversing;
 	private bool m_RageGiveUp;        // stopped trying to dodge a pushable entity — now barging over it
@@ -121,6 +127,7 @@ public sealed class TrafficVehicle : Component
 	private float m_ReverseTime;      // how long we've been reversing this attempt
 	private bool m_RageGoAround;      // steering wide around an obstacle (latched while blocked + a short hold after)
 	private float m_GoAroundHold;     // remaining hold time for the go-around after the obstacle clears
+	private float m_RelocateCooldown; // throttles the nearest-road search while the car is displaced off its route
 	private System.Random m_Rng;
 
 
@@ -146,9 +153,6 @@ public sealed class TrafficVehicle : Component
 		WorldRotation = Rotation.LookAt(m_Heading, Vector3.Up);
 
 		ComputeForwardExtents();
-
-		// If the prefab as a model renderer attaced to it, we retrieve to determine bounds of the vehicle
-		m_ModelRenderer = GetComponent<ModelRenderer>();
 		
 		// If the spawned prefab is a real physics car, we drive it through its controller instead of on rails.
 		m_Car = GetComponent<CarController>();
@@ -206,9 +210,11 @@ public sealed class TrafficVehicle : Component
 	private const float RageStuckTime = 1.0f;       // …for this long ⇒ reverse and try another angle
 	private const float RageReverseDuration = 1.2f;  // seconds to back up before trying forward again
 	private const float RageAroundClearance = 260.0f; // how far to the side we aim when steering around an obstacle
-	private const float RageContactGap = 15.0f;     // bumper gap (units) below which an AI car ahead is a collision, not a queue — rage may break the deadlock
 	private const float MaxCorneringAccel = 250.0f; // lateral-grip budget (units/s²) → how fast we dare take a curve (raise = more daring)
 	private const float BrakeDecel = 350.0f;        // assumed braking deceleration (units/s²) for the slow-in-time profile (lower = brakes earlier)
+	private const float RelocateOffThreshold = 80.0f;  // altitude gap (units) from the current lane that means we've been knocked off the route (e.g. off a bridge) and should look for another road
+	private const float RelocateAltitudeBand = 60.0f;  // when re-entering, roads within this height of the closest-altitude road count as "the same level" and compete on proximity
+	private const float RelocateInterval = 0.25f;       // seconds between nearest-road searches while displaced (the search is the expensive bit)
 
 
 
@@ -217,17 +223,24 @@ public sealed class TrafficVehicle : Component
 		if (Graph is null || m_Path.Count < 2)
 			return;
 
+		// Once a player takes the wheel of this car, it's theirs for good — latch it so the AI never reclaims it.
+		if (m_Car.IsValid() && m_Car.IsDriven)
+			m_PlayerTookOver = true;
+
 		// With a physics CarController on the object, feed it engine/brake/steer and let physics move it; otherwise
 		// fall back to the lightweight on-rails movement (kinematic placeholder vehicles).
 		if (m_Car.IsValid())
 		{
-			if (m_Car.IsAiControlled)
-			{
-				DriveCarController();	
-			}
+			// We own the "is the AI driving?" decision; mirror it onto the shared controller, then drive if it's ours.
+			m_Car.IsAiControlled = IsAiControlled;
+
+			if (IsAiControlled)
+				DriveCarController();
 		}
 		else
+		{
 			DriveOnRails();
+		}
 	}
 
 
@@ -303,6 +316,17 @@ public sealed class TrafficVehicle : Component
 		bool hasBody = m_Car.Rigidbody.IsValid();
 		float planarSpeed = hasBody ? m_Car.Rigidbody.Velocity.WithZ(0.0f).Length : 0.0f;
 
+		// If we've been knocked off our route (e.g. rammed off a bridge), re-localize onto the nearest road AT OUR
+		// HEIGHT rather than blindly steering toward the old waypoints — which, being a 2-D chase, would drive us to
+		// the spot directly under the bridge. Throttled, since the search scans the whole lane network.
+		m_RelocateCooldown -= Time.Delta;
+
+		if (m_RelocateCooldown <= 0.0f && IsOffPath())
+		{
+			RelocateToNearestLane();
+			m_RelocateCooldown = RelocateInterval;
+		}
+
 		AdvancePathProgress(planarSpeed);
 
 		if (m_Path.Count < 2)
@@ -310,7 +334,7 @@ public sealed class TrafficVehicle : Component
 
 		// Patience / road-rage state machine, then the aggressive driver takes over for the whole rage.
 		m_EntityAhead = NearestEntityAhead();
-		UpdateAIState();
+		UpdateAIState(planarSpeed);
 
 		if (m_State == AIState.RoadRage)
 		{
@@ -397,6 +421,101 @@ public sealed class TrafficVehicle : Component
 
 
 
+	// True when the car has drifted far from its lane vertically — i.e. it's been knocked to a different level (off a
+	// bridge, into a ditch) and is no longer on the road its waypoints describe. We compare the car's height to the
+	// road surface height directly beneath it (interpolated along the current segment), so slopes don't count as "off".
+	private bool IsOffPath()
+	{
+		if (m_Target <= 0 || m_Target >= m_Path.Count)
+			return false;
+
+		Vector3 a = m_Path[m_Target - 1];
+		Vector3 b = m_Path[m_Target];
+		Vector3 abH = (b - a).WithZ(0.0f);
+		float lenSq = abH.LengthSquared;
+		float t = lenSq > 0.01f ? (Vector3.Dot((WorldPosition - a).WithZ(0.0f), abH) / lenSq).Clamp(0.0f, 1.0f) : 0.0f;
+
+		float surfaceZ = a.z + (b.z - a.z) * t; // road height at our position along the segment
+
+		return MathF.Abs(WorldPosition.z - surfaceZ) > RelocateOffThreshold;
+	}
+
+
+
+	// Re-localizes the car onto a road it can actually reach from where it is now, used after it's been displaced off
+	// its route. The road is chosen by ALTITUDE FIRST: we find the closest any road comes to our current height, then
+	// among the roads at (roughly) that height we pick the nearest one horizontally. So a ground road under a bridge —
+	// matching our height — always wins over the bridge deck overhead, which we couldn't drive up onto anyway.
+	private void RelocateToNearestLane()
+	{
+		if (Graph is null)
+			return;
+
+		// Pass 1: the smallest height difference any road has to us — i.e. "ground level" from the car's point of view.
+		float minHeightGap = float.MaxValue;
+
+		foreach (var lane in Graph.Lanes)
+		{
+			if (!lane.IsRoadLane || lane.Waypoints.Count < 2)
+				continue;
+
+			foreach (var wp in lane.Waypoints)
+				minHeightGap = MathF.Min(minHeightGap, MathF.Abs(wp.z - WorldPosition.z));
+		}
+
+		if (minHeightGap == float.MaxValue)
+			return;
+
+		// Pass 2: among only the roads near that height (everything higher/lower — like the bridge — is off-limits),
+		// take the nearest waypoint horizontally.
+		float heightCeiling = minHeightGap + RelocateAltitudeBand;
+		TrafficLane bestLane = null;
+		int bestIndex = 0;
+		float bestDistSq = float.MaxValue;
+
+		foreach (var lane in Graph.Lanes)
+		{
+			if (!lane.IsRoadLane || lane.Waypoints.Count < 2)
+				continue;
+
+			for (int i = 0; i < lane.Waypoints.Count; i++)
+			{
+				Vector3 wp = lane.Waypoints[i];
+
+				if (MathF.Abs(wp.z - WorldPosition.z) > heightCeiling)
+					continue;
+
+				float distSq = (wp - WorldPosition).WithZ(0.0f).LengthSquared;
+
+				if (distSq < bestDistSq)
+				{
+					bestDistSq = distSq;
+					bestLane = lane;
+					bestIndex = i;
+				}
+			}
+		}
+
+		// Nothing to move to, or we're already on the best lane — leave the route untouched.
+		if (bestLane is null || ReferenceEquals(bestLane, m_Lane))
+			return;
+
+		// Re-target onto that lane at the nearest waypoint (driving in the lane's direction) WITHOUT teleporting the
+		// physics body — the car drives itself back onto the road. Drop any stale turn / rage state from the old route.
+		SetPath(new List<Vector3>(bestLane.Waypoints), bestLane, 0);
+		m_Target = Math.Min(bestIndex + 1, m_Path.Count - 1);
+		m_PlannedNext = null;
+		m_UsingUTurnArc = false;
+		m_State = AIState.Normal;
+		m_BlockedTime = 0.0f;
+		m_RoadRageTime = 0.0f;
+		m_RageGiveUp = false;
+		m_RageReversing = false;
+		m_RageGoAround = false;
+	}
+
+
+
 	// Steering input [-1, 1] that turns the car toward a world point (pure pursuit). Positive = left.
 	private float SteerToward(Vector3 _WorldTarget)
 	{
@@ -415,36 +534,22 @@ public sealed class TrafficVehicle : Component
 
 
 
-	// A rage-relevant obstacle sits within following distance ahead. A player/prop always counts. Another AI traffic
-	// car normally does NOT — we brake for it via the gap system but it stays invisible to the rage machine, so a
-	// queue at a red light never makes the car behind "lose patience". The one exception is a genuine collision: if
-	// an AI car is jammed right against our bumper (not merely queued at a normal gap), the two can stay wedged
-	// together forever, so there we DO let the rage machine kick in to break the deadlock.
-	private bool HasRageEntityAhead => m_EntityAhead < Spacing && (!m_EntityAheadIsAiCar || IsTouchingVehicleAhead());
-
-
-
-	// True when another traffic car is jammed right up against our front (bumper gap below RageContactGap) — a real
-	// collision, not a following gap. We deliberately do NOT use the awareness sphere's hit distance for this: that
-	// sphere's radius is the (large) AwarenessRadius, so it reports a near-zero distance even for a car queued a full
-	// gap ahead. Pivot-to-pivot distance minus both bodies' extents is the true bumper gap, and only contact drives it to ~0.
-	private bool IsTouchingVehicleAhead()
+	// True when the car is sitting in a road lane that feeds a RED traffic light — the one place a car is supposed to
+	// wait, so it must never lose patience there (otherwise a whole queue behind a red light would rage). Everywhere
+	// else, staying stuck eventually trips road rage.
+	private bool IsWaitingAtRedLight()
 	{
-		if (Neighbors is null)
+		if (m_Lane is null || !m_Lane.IsRoadLane || m_Target <= m_ConnectorEnd)
 			return false;
 
-		foreach (var other in Neighbors)
+		foreach (var successor in m_Lane.Successors)
 		{
-			if (other == this || !other.IsValid())
-				continue;
-
-			Vector3 toOther = (other.WorldPosition - WorldPosition).WithZ(0.0f);
-
-			if (Vector3.Dot(toOther, m_Heading) <= 0.0f)
-				continue; // only something in front of us
-
-			if (toOther.Length - m_FrontExtent - other.RearExtent < RageContactGap)
+			if (successor.Owner is RoadIntersectionComponent intersection
+				&& intersection.HasTrafficLights
+				&& !intersection.IsApproachGreen(m_Lane.EndDir))
+			{
 				return true;
+			}
 		}
 
 		return false;
@@ -452,17 +557,17 @@ public sealed class TrafficVehicle : Component
 
 
 
-	// Patience → road-rage state machine. While Normal, time spent stuck behind a tagged entity (player/prop)
-	// accrues; past LoosePatience the driver snaps into RoadRage for RoadRageDuration seconds — staying aggressive
-	// for the full duration even after the obstacle clears — then reverts to Normal.
-	private void UpdateAIState()
+	// Patience → road-rage state machine. A driver that stays stuck (barely moving) loses patience and, past
+	// LoosePatience, snaps into RoadRage for RoadRageDuration seconds — staying aggressive the whole time even after it
+	// frees up — then reverts to Normal. The ONE place stopping is legitimate is queued behind a red light, so that
+	// never counts as stuck; everything else (jammed in a junction, blocked by a player or a car) eventually rages.
+	private void UpdateAIState(float _PlanarSpeed)
 	{
-		bool entityClose = HasRageEntityAhead;              // a player/prop (never an AI car) is right in front of us
-		bool blocked = entityClose && m_SpeedScale < 0.1f;  // …and we're stuck behind it
+		bool stuck = _PlanarSpeed < RageStuckSpeed && !IsWaitingAtRedLight(); // barely moving, and not waiting at a light
 
 		if (m_State == AIState.Normal)
 		{
-			m_BlockedTime = blocked ? m_BlockedTime + Time.Delta : 0.0f;
+			m_BlockedTime = stuck ? m_BlockedTime + Time.Delta : 0.0f;
 
 			if (m_BlockedTime >= LoosePatience)
 			{
@@ -480,20 +585,31 @@ public sealed class TrafficVehicle : Component
 		}
 		else // RoadRage
 		{
-			m_RoadRageTime -= Time.Delta;
-
-			if (m_RoadRageTime <= 0.0f)
+			// Stay enraged as long as we're still stuck on something. The cool-down only runs once we're moving freely
+			// again; getting stuck again tops it straight back up — so the rage lasts until we're genuinely clear, then
+			// fades RoadRageDuration seconds after recovering.
+			if (stuck)
 			{
-				m_State = AIState.Normal;
-				m_BlockedTime = 0.0f;
-				m_RageGiveUp = false;
-				m_RageReversing = false;
-				m_RageGoAround = false;
+				m_RoadRageTime = RoadRageDuration;
 			}
-			else if (!m_RageGiveUp)
+			else
 			{
-				// Still trying to dodge — but if the entity keeps thwarting us, give up and just plough through.
-				if (entityClose)
+				m_RoadRageTime -= Time.Delta;
+
+				if (m_RoadRageTime <= 0.0f)
+				{
+					m_State = AIState.Normal;
+					m_BlockedTime = 0.0f;
+					m_RageGiveUp = false;
+					m_RageReversing = false;
+					m_RageGoAround = false;
+				}
+			}
+
+			// While still raging, escalate to barging if a (pushable) entity keeps thwarting the dodge.
+			if (m_State == AIState.RoadRage && !m_RageGiveUp)
+			{
+				if (m_EntityAhead < Spacing)
 					m_RageBlockedTime += Time.Delta;
 
 				if (m_RageBlockedTime >= RageAvoidWindow)
@@ -516,7 +632,7 @@ public sealed class TrafficVehicle : Component
 		float forwardSpeed = m_Car.Rigidbody.IsValid() ? Vector3.Dot(m_Car.Rigidbody.Velocity, WorldRotation.Forward) : 0.0f;
 		float planarSpeed = m_Car.Rigidbody.IsValid() ? m_Car.Rigidbody.Velocity.WithZ(0.0f).Length : 0.0f;
 
-		bool entityBlocking = !m_RageGiveUp && HasRageEntityAhead;
+		bool entityBlocking = !m_RageGiveUp && m_EntityAhead < Spacing;
 
 		// Jam = shoving forward but barely moving. (Only meaningful while we're actually going forward.)
 		bool jammed = false;
@@ -1075,12 +1191,11 @@ public sealed class TrafficVehicle : Component
 
 
 
-	// Nearest tagged entity ahead, via a forward sphere sweep filtered by the manager's tag set. The tag filter
-	// means the flat road/sidewalk meshes are never hit — only players/NPCs/whatever carries one of the tags.
+	// Nearest UNMANAGED tagged entity ahead, via a forward sphere sweep filtered by the manager's tag set (so the flat
+	// road/sidewalk meshes are never hit). Other AI traffic cars are deliberately skipped here — car-to-car is owned by
+	// the deterministic right-of-way system instead (see the hit handling below). What's left is players, their cars and props.
 	private float NearestEntityAhead()
 	{
-		m_EntityAheadIsAiCar = false;
-
 		if (AwareTags == null || AwareTags.IsEmpty)
 			return float.MaxValue;
 		
@@ -1094,24 +1209,29 @@ public sealed class TrafficVehicle : Component
 		Vector3 to = from + lookDir * Spacing * 0.5f;
 
 		SceneTraceResult trace = Scene.Trace
-			.Sphere(DetectRadius, from, to)
+			.Sphere(m_FrontExtent * 0.5f, from, to)
 			.WithAnyTags(AwareTags)
 			.IgnoreGameObjectHierarchy(GameObject)
 			.Run();
 
-		DebugOverlay.Trace(trace);
-		
+		if (Game.IsPlaying && RoadManager.Current.ShowLayoutOverlays)
+			DebugOverlay.Trace(trace);
+
 		if (!trace.Hit)
 			return float.MaxValue;
 
-		// Still brake for whatever we hit — but flag when it's another AI-driven traffic car so the road-rage
-		// machine can ignore it. Otherwise a car queued behind others at a red light would decide it's being
-		// blocked on purpose and "lose patience". A managed NPC car has a TrafficVehicle whose CarController is
-		// AI-controlled; a player's car — driven OR parked in the road — has neither, so it can still provoke rage.
-		var otherCar = trace.GameObject.GetComponentInParent<CarController>();
-		var otherVehicle = trace.GameObject.GetComponentInParent<TrafficVehicle>();
-		m_EntityAheadIsAiCar = otherVehicle.IsValid() && otherCar.IsValid() && otherCar.IsAiControlled;
-		
+		// Another AI-DRIVEN traffic car? Ignore it here. Car-to-car right-of-way is owned by the deterministic system
+		// (NearestVehicleAhead + ShouldYieldTo): it gives exactly one of any two conflicting cars priority and never
+		// stalls them mid-junction. If this symmetric sphere ALSO braked for them, two cars whose spheres overlap at an
+		// angle would each read the other as a wall and both freeze — that's the intersection deadlock. We check the
+		// brain's IsAiControlled, NOT just its presence, so a player who STOLE a traffic car (brain dormant) is still
+		// seen as the obstacle it now is. The sphere's job is everything the deterministic system can't see: players,
+		// their cars (stolen or own) and props.
+		var managed = trace.GameObject.GetComponentInParent<TrafficVehicle>();
+
+		if (managed.IsValid() && managed.IsAiControlled)
+			return float.MaxValue;
+
 		return trace.Distance;
 	}
 

@@ -17,8 +17,6 @@ namespace RedSnail.RoadTool;
 [Icon("directions_car")]
 public sealed class CarController : Component
 {
-	private bool m_WasDriven;
-	
 	[RequireComponent] public Rigidbody Rigidbody { get; set; }
 
 	[Property, Group("Engine")] public float EnginePower { get; set; } = 25000.0f;
@@ -37,7 +35,9 @@ public sealed class CarController : Component
 	/// <summary>Input action held for the handbrake (locks the rear wheels). Defaults to Jump (space).</summary>
 	[Property, Group("Input")] public string HandbrakeAction { get; set; } = "Jump";
 
-	/// <summary>When true, the vehicle drives from the Ai* inputs below instead of idling — set by the traffic system for NPC cars.</summary>
+	/// <summary>True while a traffic brain is driving this car (vs a seated player). It's the brain's call — pushed in by
+	/// <see cref="TrafficVehicle.IsAiControlled"/> each frame — so a plain player car with no brain just leaves it false.
+	/// When set, the car drives from the Ai* inputs below.</summary>
 	public bool IsAiControlled { get; set; }
 	public float AiThrottle { get; set; }
 	public float AiSteer { get; set; }
@@ -71,11 +71,6 @@ public sealed class CarController : Component
 		// The driver is the player seated in the driver seat (or any seated player if no seat is assigned).
 		PlayerController driver = DriverSeat.IsValid() ? DriverSeat.GetOccupant() : GetComponentInChildren<PlayerController>();
 		IsDriven = driver.IsValid();
-
-		if (IsDriven && !m_WasDriven)
-			m_WasDriven = true;
-		
-		IsAiControlled = !m_WasDriven;
 
 		float throttle;
 		float steer;

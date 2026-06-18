@@ -26,17 +26,20 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 	[Property(Title = "Brake For Tags"), Feature("Traffic"), Category("Awareness")] private TagSet AwarenessTags { get; set; }
 	[Property(Title = "Detect Radius"), Feature("Traffic"), Category("Awareness"), Range(10.0f, 200.0f)] private float AwarenessRadius { get; set; } = 100.0f;
 
-	[Property(Title = "Lose Patience After"), Feature("Traffic"), Category("Road Rage"), Range(1.0f, 120.0f)] private float LoosePatience { get; set; } = 20.0f;
-	[Property(Title = "Road Rage Duration"), Feature("Traffic"), Category("Road Rage"), Range(1.0f, 120.0f)] private float RoadRageDuration { get; set; } = 20.0f;
+	[Property(Title = "Lose Patience After"), Feature("Traffic"), Category("Road Rage"), Range(1.0f, 120.0f)] private float LoosePatience { get; set; } = 10.0f;
+	[Property(Title = "Road Rage Duration"), Feature("Traffic"), Category("Road Rage"), Range(1.0f, 120.0f)] private float RoadRageDuration { get; set; } = 5.0f;
 
 	[Property, Feature("Traffic"), Category("Layout"), Range(50.0f, 500.0f)] private float WaypointSpacing { get; set { field = value.Clamp(10.0f, 10000.0f); m_IsDirty = true; } } = 150.0f;
 	[Property(Title = "Connection Distance"), Feature("Traffic"), Category("Layout"), Range(20.0f, 600.0f)] private float LinkThreshold { get; set { field = value; m_IsDirty = true; } } = 200.0f;
 
 	[Property, Feature("Traffic"), Category("Debug")] private bool ShowLayoutGizmos { get; set; } = true;
-
+	[Property, Feature("Traffic"), Category("Debug")] public bool ShowLayoutOverlays { get; set; } = true;
+	
+	public static RoadManager Current { get; set; }
+	
 	private RoadTrafficGraph m_Graph;
 	private GameObject m_VehicleContainer;
-	private readonly List<TrafficVehicle> m_Vehicles = new();
+	private readonly List<TrafficVehicle> m_Vehicles = [];
 	private bool m_IsDirty = true;
 	private bool m_HasSpawned;
 
@@ -54,6 +57,8 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 	{
 		m_IsDirty = true;
 		m_HasSpawned = false;
+
+		Current ??= this;
 	}
 
 
@@ -64,9 +69,17 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 		m_Graph = null;
 		m_HasSpawned = false;
 	}
-
-
-
+	
+	
+	
+	protected override void OnDestroy()
+	{
+		if (Current == this)
+			Current = null;
+	}
+	
+	
+	
 	protected override void OnUpdate()
 	{
 		if (SandboxUtility.IsInPlayMode)
@@ -77,6 +90,9 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 				SpawnVehicles();
 				m_HasSpawned = true;
 			}
+			
+			// Debug
+			DrawLayoutDebugOverlay();
 
 			return;
 		}
@@ -88,9 +104,49 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 			m_IsDirty = false;
 		}
 	}
+	
+	
+	
+	private void DrawLayoutDebugOverlay()
+	{
+		if (!ShowLayoutOverlays)
+			return;
+		
+		Vector3 offset = Vector3.Up * 25;
+		
+		foreach (var lane in m_Graph.Lanes)
+		{
+			if (lane.Waypoints.Count < 2)
+				continue;
 
+			Color color = lane.IsRoadLane ? Color.Cyan : new Color(0.4f, 1.0f, 0.4f);
+			
+			for (int i = 0; i < lane.Waypoints.Count - 1; i++)
+			{
+				Vector3 a = lane.Waypoints[i] + offset;
+				Vector3 b = lane.Waypoints[i + 1] + offset;
+				
+				DebugOverlay.Line(a, b, color);
+			}
+			
+			// Contained dead-end "U-turn" arc.
+			if (lane.UTurnArc is { Count: >= 2 })
+			{
+				color = new Color(1.0f, 0.6f, 0.1f);
 
-
+				for (int i = 0; i < lane.UTurnArc.Count - 1; i++)
+				{
+					Vector3 ua = lane.UTurnArc[i] + offset;
+					Vector3 ub = lane.UTurnArc[i + 1] + offset;
+					
+					DebugOverlay.Line(ua, ub, color);
+				}
+			}
+		}
+	}
+	
+	
+	
 	[Button("Rebuild Pathfinding Layout"), Feature("Traffic"), Order(10)]
 	public void RebuildPathfindingLayout()
 	{
@@ -187,7 +243,7 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 			clone.Flags |= GameObjectFlags.NotSaved;
 
 			// The prefab is just the visual/body — the manager attaches the driver and points it at its lane.
-			var vehicle = clone.AddComponent<TrafficVehicle>();
+			var vehicle = clone.GetOrAddComponent<TrafficVehicle>();
 			vehicle.DefaultSpeed = DefaultSpeed * TrafficMath.KmhToUnits;
 			vehicle.HoverHeight = HoverHeight;
 			vehicle.Spacing = VehicleSpacing;
