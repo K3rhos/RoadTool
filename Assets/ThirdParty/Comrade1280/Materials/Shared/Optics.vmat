@@ -4,6 +4,9 @@ Layer0
 {
 	shader "shaders/complex.shader"
 
+	//---- Color ----
+	F_TINT_MASK 1
+
 	//---- PBR ----
 	F_SPECULAR 1
 
@@ -16,6 +19,7 @@ Layer0
 	g_flModelTintAmount "1.000"
 	g_vColorTint "[1.000000 1.000000 1.000000 0.000000]"
 	TextureColor "thirdparty/comrade1280/textures/shared/lights.jpg"
+	TextureTintMask "[0.000000 0.000000 0.000000 0.000000]"
 
 	//---- Fade ----
 	g_flFadeExponent "1.000"

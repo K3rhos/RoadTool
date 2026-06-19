@@ -6,16 +6,14 @@ using Sandbox;
 namespace RedSnail.RoadTool;
 
 /// <summary>
-/// A deliberately simple arcade car controller — a physics body driven by <see cref="Wheel"/> components.
-/// A player drives it by sitting in an s&amp;box <see cref="BaseChair"/> attached to the vehicle (the native
-/// sit system); while no one drives it, it just holds the brakes. It exposes an AI input path so the traffic
-/// system can drive an NPC car through the same controller later.
-///
-/// Ported and stripped down from a fuller vehicle controller: there is no gearbox, no engine RPM/sound, and
-/// none of the cosmetic systems — just engine power with forward/reverse, braking and a handbrake.
+/// A deliberately simple arcade car controller for demo purpose in my Road Tool.
+/// It's obviously recommended to either: make your own component
+/// or use my Vehicle Controller library (Not yet available)
 /// </summary>
 [Icon("directions_car")]
-public sealed class CarController : Component
+[Title("Demo - Car Controller")]
+[Category("Demo")]
+public sealed class DemoCarController : Component
 {
 	[RequireComponent] public Rigidbody Rigidbody { get; set; }
 
@@ -28,9 +26,6 @@ public sealed class CarController : Component
 
 	[Property, Group("Physics")] public float AngularDamping { get; set; } = 8.0f;
 	[Property, Group("Physics")] public float HandbrakeAngularDamping { get; set; } = 0.1f;
-
-	/// <summary>Optional explicit driver seat. If unset, any player seated under the vehicle drives it.</summary>
-	[Property, Group("Seat")] public BaseChair DriverSeat { get; set; }
 
 	/// <summary>Input action held for the handbrake (locks the rear wheels). Defaults to Jump (space).</summary>
 	[Property, Group("Input")] public string HandbrakeAction { get; set; } = "Jump";
@@ -51,14 +46,14 @@ public sealed class CarController : Component
 	/// <summary>Signed forward speed in km/h (negative while reversing).</summary>
 	public float SpeedKmh => Rigidbody.IsValid() ? Vector3.Dot(Rigidbody.Velocity, WorldRotation.Forward) * 0.09144f : 0.0f;
 
-	private List<Wheel> m_Wheels = new();
+	private List<DemoWheel> m_Wheels = new();
 	private float m_CurrentTorque;
 
 
 
 	protected override void OnAwake()
 	{
-		m_Wheels = GetComponentsInChildren<Wheel>().ToList();
+		m_Wheels = GetComponentsInChildren<DemoWheel>().ToList();
 	}
 
 
@@ -69,14 +64,14 @@ public sealed class CarController : Component
 			return;
 
 		// The driver is the player seated in the driver seat (or any seated player if no seat is assigned).
-		PlayerController driver = DriverSeat.IsValid() ? DriverSeat.GetOccupant() : GetComponentInChildren<PlayerController>();
+		PlayerController driver = GetComponentInChildren<PlayerController>();
 		IsDriven = driver.IsValid();
 
 		float throttle;
 		float steer;
 		bool handbrake;
 
-		if (IsDriven && !driver.IsProxy)
+		if (IsDriven && driver is { IsProxy: false })
 		{
 			// Local seated player: read live controls. (Movement is consumed by the sit mode, so WASD is free for us.)
 			throttle = Input.AnalogMove.x;
@@ -151,7 +146,7 @@ public sealed class CarController : Component
 
 		Rigidbody.AngularDamping = handbraking ? HandbrakeAngularDamping : AngularDamping;
 
-		foreach (Wheel wheel in m_Wheels)
+		foreach (DemoWheel wheel in m_Wheels)
 		{
 			if (!wheel.IsValid())
 				continue;

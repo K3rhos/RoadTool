@@ -1,0 +1,71 @@
+{
+  "RootObject": {
+    "__guid": "c3439d53-b752-4a5d-984b-c47a5572153a",
+    "__version": 2,
+    "Flags": 0,
+    "Name": "vehiclespawner",
+    "Position": "0,0,0",
+    "Rotation": "0,0,0,1",
+    "Scale": "1,1,1",
+    "Tags": "",
+    "Enabled": true,
+    "NetworkMode": 1,
+    "NetworkFlags": 0,
+    "NetworkOrphaned": 1,
+    "NetworkTransmit": true,
+    "OwnerTransfer": 1,
+    "Components": [
+      {
+        "__type": "RedSnail.RoadTool.ParkingSystem",
+        "__guid": "bdfdf263-f22c-4f01-bc55-e15bee4c6838",
+        "__enabled": true,
+        "Flags": 0,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "RandomOppositeYaw": true,
+        "RespawnMaxTime": 120,
+        "RespawnMinTime": 60,
+        "SpawnArea": {
+          "Mins": "-50,-100,0",
+          "Maxs": "50,100,80"
+        },
+        "SpawnChance": 30,
+        "SpawnOnEnable": true,
+        "Vehicles": "resources/groundvehicles.vset"
+      }
+    ],
+    "Children": [],
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": []
+  },
+  "ResourceVersion": 2,
+  "ShowInMenu": false,
+  "MenuPath": null,
+  "MenuIcon": null,
+  "DontBreakAsTemplate": false,
+  "__references": [],
+  "__version": 2
+}

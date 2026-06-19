@@ -3,7 +3,15 @@ using Sandbox;
 
 namespace RedSnail.RoadTool;
 
-public sealed class Wheel : Component
+/// <summary>
+/// A deliberately simple custom wheel system for demo purpose in my Road Tool.
+/// It's obviously recommended to either: make your own component
+/// or use my Vehicle Controller library (Not yet available)
+/// </summary>
+[Icon("tire_repair")]
+[Title("Demo - Wheel")]
+[Category("Demo")]
+public sealed class DemoWheel : Component
 {
 	public enum WheelPhysic
 	{
@@ -19,7 +27,7 @@ public sealed class Wheel : Component
 	
 	private ModelRenderer m_ModelRenderer;
 	private Rigidbody m_Rigidbody;
-	private CarController m_CarController;
+	private DemoCarController m_CarController;
 	
 	private SceneTraceResult m_GroundTrace;
 	private SceneTraceResult m_BackupGroundTrace;
@@ -76,8 +84,8 @@ public sealed class Wheel : Component
 	[Property, Range(0.1f, 2.0f), Group("Grip"), Order(3)] private float MaxGripAngle { get; set; } = 0.3f;
 	[Property, Range(0.1f, 2.0f), Group("Grip"), Order(3)] private float NoGripAngle { get; set; } = 0.8f;
 
-	[Property, Group("Friction"), Order(4)] private WheelFrictionInfo ForwardFriction { get; set; }
-	[Property, Group("Friction"), Order(4)] private WheelFrictionInfo SideFriction { get; set; }
+	[Property, Group("Friction"), Order(4)] private DemoWheelFrictionResource ForwardFriction { get; set; }
+	[Property, Group("Friction"), Order(4)] private DemoWheelFrictionResource SideFriction { get; set; }
 	
 	[Property, Group("Braking"), Order(5)] private float MaxBrakeForce { get; set; } = 5000.0f;
 	
@@ -87,7 +95,7 @@ public sealed class Wheel : Component
 	{
 		m_ModelRenderer = GetComponentInChildren<ModelRenderer>();
 		m_Rigidbody = GetComponentInParent<Rigidbody>();
-		m_CarController = GetComponentInParent<CarController>();
+		m_CarController = GetComponentInParent<DemoCarController>();
 	}
 	
 	
@@ -168,7 +176,7 @@ public sealed class Wheel : Component
 	
 	
 	
-	private static Vector3 CalculateFrictionForce(WheelFrictionInfo _Friction, float _Mass, float _Slip, Vector3 _Direction)
+	private static Vector3 CalculateFrictionForce(DemoWheelFrictionResource _Friction, float _Mass, float _Slip, Vector3 _Direction)
 	{
 		return -_Friction.Evaluate(MathF.Abs(_Slip), _Mass) * MathF.Sign(_Slip) * _Direction;
 	}

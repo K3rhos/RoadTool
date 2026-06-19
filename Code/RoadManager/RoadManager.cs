@@ -13,16 +13,21 @@ namespace RedSnail.RoadTool;
 [Icon("directions_car")]
 public sealed class RoadManager : Component, Component.ExecuteInEditor
 {
-	private const string VehicleContainerName = "Traffic_Vehicles";
+	private const float TrafficStreamInterval = 0.25f; // seconds between streaming passes (despawn strays, top up near players)
+	private const int MaxSpawnsPerTick = 5;            // cap cars spawned per pass so a fresh area fills in gradually, not in one burst
 
-	[Property(Title = "Prefab"), Feature("Traffic"), Category("Vehicles")] private GameObject VehiclePrefab { get; set; }
-	[Property, Feature("Traffic"), Category("Vehicles"), Range(0, 500)] private int VehicleCount { get; set { field = value; m_IsDirty = true; } } = 30;
+	[Property, Feature("Traffic"), Category("Vehicles")] private VehicleSetResource VehicleSet { get; set; }
 	[Property(Title = "Default Speed"), Feature("Traffic"), Category("Vehicles"), Range(5.0f, 130.0f)] private float DefaultSpeed { get; set; } = 30.0f;
 	[Property(Title = "Following Gap"), Feature("Traffic"), Category("Vehicles"), Range(50.0f, 600.0f)] private float VehicleSpacing { get; set; } = 180.0f;
 	[Property(Title = "Spawn Gap"), Feature("Traffic"), Category("Vehicles"), Range(50.0f, 1000.0f)] private float SpawnGap { get; set; } = 250.0f;
 	[Property(Title = "Stop Margin"), Feature("Traffic"), Category("Vehicles"), Range(0.0f, 500.0f)] private float StopMargin { get; set; } = 150.0f;
-	[Property(Title = "Height Offset"), Feature("Traffic"), Category("Vehicles"), Range(0.0f, 300.0f)] private float HoverHeight { get; set; } = 45.0f;
 
+	[Property(Title = "Density"), Feature("Traffic"), Category("Streaming"), Range(0.0f, 1.0f)] private float TrafficDensity { get; set; } = 0.15f;
+	[Property(Title = "Spawn Min Range"), Feature("Traffic"), Category("Streaming"), Range(0.0f, 20000.0f)] private float TrafficSpawnMinDistance { get; set; } = 3000.0f;
+	[Property(Title = "Spawn Range"), Feature("Traffic"), Category("Streaming"), Range(500.0f, 20000.0f)] private float TrafficSpawnDistance { get; set; } = 5000.0f;
+	[Property(Title = "Despawn Range"), Feature("Traffic"), Category("Streaming"), Range(500.0f, 20000.0f)] private float TrafficDespawnDistance { get; set; } = 7000.0f;
+	[Property(Title = "Height Offset"), Feature("Traffic"), Category("Streaming"), Range(0.0f, 300.0f)] private float SpawnHeightOffset { get; set; } = 0.0f;
+	
 	[Property(Title = "Brake For Tags"), Feature("Traffic"), Category("Awareness")] private TagSet AwarenessTags { get; set; }
 	[Property(Title = "Detect Radius"), Feature("Traffic"), Category("Awareness"), Range(10.0f, 200.0f)] private float AwarenessRadius { get; set; } = 100.0f;
 
@@ -34,14 +39,26 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 
 	[Property, Feature("Traffic"), Category("Debug")] private bool ShowLayoutGizmos { get; set; } = true;
 	[Property, Feature("Traffic"), Category("Debug")] public bool ShowLayoutOverlays { get; set; } = true;
+
+	[Property, Feature("Parking Lot")] public float ParkedVehicleDespawnDistance { get; set; } = 6000.0f;
+	[Property, Feature("Parking Lot")] public float ParkedVehicleRespawnDistance { get; set; } = 4000.0f;
 	
 	public static RoadManager Current { get; set; }
+
+	/// <summary>
+	/// Optional override for how the library locates players. Set this from your game to feed players in from your own
+	/// (faster) source — e.g. a static player list — and the library queries it instead of scanning the scene. Leave it
+	/// null and the default applies: every object carrying the "player" tag. The default is universal — it never depends
+	/// on a specific player component — but it walks the whole scene each call, so plug this in for big maps / many spots.
+	/// </summary>
+	public static Func<IEnumerable<GameObject>> FindPlayers { get; set; }
 	
 	private RoadTrafficGraph m_Graph;
-	private GameObject m_VehicleContainer;
 	private readonly List<TrafficVehicle> m_Vehicles = [];
+	private readonly List<(TrafficLane Lane, int Index)> m_SpawnSlots = []; // candidate spawn points along the lanes, rebuilt with the graph
+	private readonly System.Random m_Rng = new();
 	private bool m_IsDirty = true;
-	private bool m_HasSpawned;
+	private float m_TrafficStreamCooldown;
 
 
 
@@ -56,7 +73,6 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 	protected override void OnEnabled()
 	{
 		m_IsDirty = true;
-		m_HasSpawned = false;
 
 		Current ??= this;
 	}
@@ -67,7 +83,7 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 	{
 		RemoveVehicles();
 		m_Graph = null;
-		m_HasSpawned = false;
+		m_SpawnSlots.Clear();
 	}
 	
 	
@@ -84,13 +100,19 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 	{
 		if (SandboxUtility.IsInPlayMode)
 		{
-			if (!m_HasSpawned)
-			{
+			// The RoadManager object is networked (Orphaned: Host), so it runs on clients too — but the traffic is owned
+			// entirely by the host: it builds the graph, spawns and despawns. A proxy just receives the networked cars.
+			if (IsProxy)
+				return;
+
+			// The host needs the lane graph before it can spawn anything; build it once.
+			if (m_Graph is null)
 				RebuildGraph();
-				SpawnVehicles();
-				m_HasSpawned = true;
-			}
-			
+
+			// GTA-style streaming: despawn cars that have drifted away from every player, and spawn new ones at empty
+			// lane slots in a ring around players, up to the density target.
+			StreamTraffic();
+
 			// Debug
 			DrawLayoutDebugOverlay();
 
@@ -104,9 +126,190 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 			m_IsDirty = false;
 		}
 	}
+
+
+
+	/// <summary>
+	/// Every player in the scene. Comes from <see cref="FindPlayers"/> when a game has plugged in its own (faster)
+	/// source, otherwise the default universal scan for objects tagged "player". Iterate this for distance checks so a
+	/// game's override applies to ALL callers (parking spots, etc.) at once, instead of each one scanning the scene.
+	/// </summary>
+	public static IEnumerable<GameObject> GetPlayers()
+	{
+		if (FindPlayers is null)
+		{
+			var players = new List<GameObject>();
+
+			foreach (var player in Game.ActiveScene.FindAllWithTag("player"))
+			{
+				// We ignore all child gameobjects of the player
+				if (player.Parent.IsValid() && player.Parent.Tags.Has("player"))
+					continue;
+				
+				players.Add(player);
+			}
+			
+			return players;
+		}
+		
+		return FindPlayers();
+	}
+
+
+
+	/// <summary>True if any player is within <paramref name="_Distance"/> of <paramref name="_Point"/> — built on <see cref="GetPlayers"/>, so a game's override is honored here too.</summary>
+	public static bool ArePlayersWithin(Vector3 _Point, float _Distance)
+	{
+		float distanceSq = _Distance * _Distance;
+
+		foreach (GameObject player in GetPlayers())
+		{
+			if (player.WorldPosition.DistanceSquared(_Point) < distanceSq)
+				return true;
+		}
+
+		return false;
+	}
 	
 	
 	
+	// GTA-style streaming (host only, throttled). Two passes: cull cars that have drifted out of every player's range,
+	// then top traffic back up to the density target by spawning at empty lane slots in a ring around the players.
+	private void StreamTraffic()
+	{
+		m_TrafficStreamCooldown -= Time.Delta;
+
+		if (m_TrafficStreamCooldown > 0.0f)
+			return;
+
+		m_TrafficStreamCooldown = TrafficStreamInterval;
+
+		// Grab the player positions once for this whole pass.
+		var players = new List<Vector3>();
+
+		foreach (GameObject player in GetPlayers())
+		{
+			if (player.IsValid())
+				players.Add(player.WorldPosition);
+		}
+
+		DespawnStrayVehicles(players);
+
+		if (players.Count > 0 && m_SpawnSlots.Count > 0 && VehicleSet.IsValid() && VehicleSet.Prefabs.Length > 0)
+			TopUpTraffic(players);
+	}
+
+
+
+	// Per-vehicle despawn: each car is judged by ITS OWN distance to the nearest player, so only the ones that have
+	// genuinely drifted out of range disappear. The car the player last drove ("last_vehicle") is never culled.
+	private void DespawnStrayVehicles(List<Vector3> _Players)
+	{
+		float despawnSq = TrafficDespawnDistance * TrafficDespawnDistance;
+
+		for (int i = m_Vehicles.Count - 1; i >= 0; i--)
+		{
+			TrafficVehicle vehicle = m_Vehicles[i];
+
+			if (!vehicle.IsValid())
+			{
+				m_Vehicles.RemoveAt(i);
+				continue;
+			}
+
+			if (vehicle.GameObject.Tags.Has("last_vehicle"))
+				continue;
+
+			if (NearestDistanceSq(vehicle.WorldPosition, _Players) > despawnSq)
+			{
+				vehicle.DestroyGameObject();
+				m_Vehicles.RemoveAt(i);
+			}
+		}
+	}
+
+
+
+	// Tops the area up to the density target by spawning at empty slots inside the spawn ring around players. Density is
+	// a fraction of the road capacity currently near a player, so "1" packs the nearby roads and "0.1" leaves them nearly
+	// empty. Spawns are capped per pass so a fresh area fills in over a second or two rather than in one burst.
+	private void TopUpTraffic(List<Vector3> _Players)
+	{
+		float despawnSq = TrafficDespawnDistance * TrafficDespawnDistance;
+		float minSq = TrafficSpawnMinDistance * TrafficSpawnMinDistance;
+		float maxSq = TrafficSpawnDistance * TrafficSpawnDistance;
+		float clearanceSq = SpawnGap * SpawnGap;
+
+		// Capacity = slots near a player; target = that × density; deficit = how far below target we are right now.
+		int capacity = 0;
+
+		foreach (var slot in m_SpawnSlots)
+		{
+			if (NearestDistanceSq(slot.Lane.Waypoints[slot.Index], _Players) <= despawnSq)
+				capacity++;
+		}
+
+		int live = 0;
+
+		foreach (var vehicle in m_Vehicles)
+		{
+			if (vehicle.IsValid() && NearestDistanceSq(vehicle.WorldPosition, _Players) <= despawnSq)
+				live++;
+		}
+
+		int deficit = Math.Min((int)(capacity * TrafficDensity) - live, MaxSpawnsPerTick);
+
+		if (deficit <= 0)
+			return;
+
+		// Walk the slots from a random offset so we don't always favour the same lanes, spawning at any that sit in the
+		// ring (near enough to matter, far enough not to pop in) and aren't already occupied by another car.
+		int start = m_Rng.Next(m_SpawnSlots.Count);
+
+		for (int n = 0; n < m_SpawnSlots.Count && deficit > 0; n++)
+		{
+			var slot = m_SpawnSlots[(start + n) % m_SpawnSlots.Count];
+			Vector3 pos = slot.Lane.Waypoints[slot.Index];
+			float nearestSq = NearestDistanceSq(pos, _Players);
+
+			if (nearestSq < minSq || nearestSq > maxSq)
+				continue;
+
+			if (IsAreaOccupied(pos, clearanceSq))
+				continue;
+
+			SpawnVehicleAt(slot.Lane, slot.Index);
+			deficit--;
+		}
+	}
+
+
+
+	private bool IsAreaOccupied(Vector3 _Point, float _RadiusSq)
+	{
+		foreach (var vehicle in m_Vehicles)
+		{
+			if (vehicle.IsValid() && vehicle.WorldPosition.DistanceSquared(_Point) < _RadiusSq)
+				return true;
+		}
+
+		return false;
+	}
+
+
+
+	private static float NearestDistanceSq(Vector3 _Point, List<Vector3> _Players)
+	{
+		float best = float.MaxValue;
+
+		foreach (Vector3 player in _Players)
+			best = MathF.Min(best, player.DistanceSquared(_Point));
+
+		return best;
+	}
+
+
+
 	private void DrawLayoutDebugOverlay()
 	{
 		if (!ShowLayoutOverlays)
@@ -147,6 +350,8 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 	
 	
 	
+	// TODO: Uncomment this when my VehicleController library will be publicly available
+	// [InfoBox("It's heavily recommend to use my VehicleController library with this tool or building your own vehicle physics/controller.", "info", EditorTint.Yellow)]
 	[Button("Rebuild Pathfinding Layout"), Feature("Traffic"), Order(10)]
 	public void RebuildPathfindingLayout()
 	{
@@ -154,8 +359,9 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 
 		if (SandboxUtility.IsInPlayMode)
 		{
-			SpawnVehicles();
-			m_HasSpawned = true;
+			// Drop the current fleet; streaming re-populates it on the fresh graph next pass (around any nearby player).
+			RemoveVehicles();
+			m_TrafficStreamCooldown = 0.0f;
 		}
 
 		m_IsDirty = false;
@@ -172,108 +378,80 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 	private void RebuildGraph()
 	{
 		m_Graph = RoadTrafficGraph.Build(Scene, Settings);
+		BuildSpawnSlots();
 	}
 
 
 
-	private void SpawnVehicles()
+	// (Re)builds the list of candidate spawn points — a waypoint index every few steps along every road lane, so two
+	// cars never land on the same spot. Rebuilt with the graph; the streaming pass spawns at these on demand.
+	private void BuildSpawnSlots()
 	{
-		RemoveVehicles();
+		m_SpawnSlots.Clear();
 
-		if (m_Graph is null || m_Graph.Lanes.Count == 0 || VehicleCount <= 0)
+		if (m_Graph is null)
 			return;
 
-		if (!VehiclePrefab.IsValid())
-		{
-			SandboxUtility.ShowEditorNotification("Traffic: assign a Vehicle Prefab to spawn vehicles");
-			return;
-		}
-
-		// Spawn on road lanes when available so cars start out on actual roads, not mid-intersection.
+		// Prefer road lanes so cars start out on actual roads, not mid-intersection.
 		var lanes = m_Graph.Lanes.Where(l => l.IsRoadLane && l.Waypoints.Count >= 2).ToList();
 
 		if (lanes.Count == 0)
 			lanes = m_Graph.Lanes.Where(l => l.Waypoints.Count >= 2).ToList();
 
-		if (lanes.Count == 0)
-			return;
-
-		// Lay out non-overlapping spawn slots along every lane — a waypoint index every few steps so two cars can
-		// never land on the same spot. The total slot count is the network's capacity, which also caps how many we
-		// spawn (a short road simply can't hold hundreds of cars).
 		int step = Math.Max(1, (int)MathF.Ceiling(SpawnGap / MathF.Max(1.0f, WaypointSpacing)));
-
-		var slots = new List<(TrafficLane Lane, int Index)>();
 
 		foreach (var lane in lanes)
 		{
 			for (int idx = 0; idx < lane.Waypoints.Count - 1; idx += step)
-				slots.Add((lane, idx));
+				m_SpawnSlots.Add((lane, idx));
 		}
+	}
 
-		if (slots.Count == 0)
+
+
+	// Spawns one networked traffic car at a slot and wires up its brain. Host only (called from the streaming pass).
+	private void SpawnVehicleAt(TrafficLane _Lane, int _Index)
+	{
+		Vector3 spawnPos = _Lane.Waypoints[_Index] + Vector3.Up * SpawnHeightOffset;
+		GameObject prefab = VehicleSet.Prefabs[m_Rng.Next(VehicleSet.Prefabs.Length)];
+		GameObject clone = prefab.Clone(spawnPos, Rotation.Identity, Vector3.One);
+
+		if (!clone.IsValid())
 			return;
 
-		var rng = new System.Random();
+		clone.NetworkSpawn(Connection.Host);
+		clone.Network.SetOrphanedMode(NetworkOrphaned.Host);
 
-		// Shuffle so a smaller VehicleCount spreads across the whole network instead of packing the first lanes.
-		for (int i = slots.Count - 1; i > 0; i--)
-		{
-			int j = rng.Next(i + 1);
-			(slots[i], slots[j]) = (slots[j], slots[i]);
-		}
+		// The prefab is just the visual/body — the manager attaches the driver and points it at its lane.
+		var vehicle = clone.GetOrAddComponent<TrafficVehicle>();
+		vehicle.DefaultSpeed = DefaultSpeed * TrafficMath.KmhToUnits;
+		vehicle.HoverHeight = SpawnHeightOffset;
+		vehicle.Spacing = VehicleSpacing;
+		vehicle.StopMargin = StopMargin;
+		vehicle.LoosePatience = LoosePatience;
+		vehicle.RoadRageDuration = RoadRageDuration;
+		vehicle.Neighbors = m_Vehicles;
+		vehicle.AwareTags = AwarenessTags;
+		vehicle.DetectRadius = AwarenessRadius;
+		vehicle.Initialize(m_Graph, _Lane, _Index, m_Rng.Next());
 
-		int spawnCount = Math.Min(VehicleCount, slots.Count);
+		var renderer = clone.GetComponent<ModelRenderer>();
 
-		m_VehicleContainer = new GameObject(GameObject, true, VehicleContainerName);
-		m_VehicleContainer.Flags |= GameObjectFlags.NotSaved;
+		// Give it a cool random tint
+		if (renderer.IsValid())
+			renderer.Tint = new Color(m_Rng.NextSingle(), m_Rng.NextSingle(), m_Rng.NextSingle(), renderer.Tint.a);
 
-		for (int i = 0; i < spawnCount; i++)
-		{
-			(TrafficLane lane, int startIndex) = slots[i];
-			Vector3 spawnPos = lane.Waypoints[startIndex] + Vector3.Up * HoverHeight;
-
-			GameObject clone = VehiclePrefab.Clone(m_VehicleContainer, spawnPos, Rotation.Identity, Vector3.One);
-
-			if (!clone.IsValid())
-				continue;
-
-			clone.Name = $"Vehicle_{i}";
-			clone.BreakFromPrefab();
-			clone.Flags |= GameObjectFlags.NotSaved;
-
-			// The prefab is just the visual/body — the manager attaches the driver and points it at its lane.
-			var vehicle = clone.GetOrAddComponent<TrafficVehicle>();
-			vehicle.DefaultSpeed = DefaultSpeed * TrafficMath.KmhToUnits;
-			vehicle.HoverHeight = HoverHeight;
-			vehicle.Spacing = VehicleSpacing;
-			vehicle.StopMargin = StopMargin;
-			vehicle.LoosePatience = LoosePatience;
-			vehicle.RoadRageDuration = RoadRageDuration;
-			vehicle.Neighbors = m_Vehicles;
-			vehicle.AwareTags = AwarenessTags;
-			vehicle.DetectRadius = AwarenessRadius;
-			vehicle.Initialize(m_Graph, lane, startIndex, rng.Next());
-
-			m_Vehicles.Add(vehicle);
-		}
-
-		if (spawnCount < VehicleCount)
-			SandboxUtility.ShowEditorNotification($"Traffic: the road network only fits {spawnCount} of {VehicleCount} vehicles");
+		m_Vehicles.Add(vehicle);
 	}
 	
 	
 	
 	private void RemoveVehicles()
 	{
+		foreach (var vehicle in m_Vehicles.ToArray())
+			vehicle.DestroyGameObject();
+		
 		m_Vehicles.Clear();
-
-		var existing = GameObject.Children.Where(c => c.Name == VehicleContainerName).ToList();
-
-		foreach (var child in existing)
-			child.Destroy();
-
-		m_VehicleContainer = null;
 	}
 
 

@@ -1,0 +1,14 @@
+{
+  "Prefabs": [
+    {
+      "_type": "gameobject",
+      "prefab": "thirdparty/comrade1280/prefabs/compact.prefab"
+    },
+    {
+      "_type": "gameobject",
+      "prefab": "thirdparty/comrade1280/prefabs/coupe.prefab"
+    }
+  ],
+  "__references": [],
+  "__version": 0
+}

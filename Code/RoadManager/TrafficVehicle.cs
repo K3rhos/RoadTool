@@ -113,7 +113,7 @@ public sealed class TrafficVehicle : Component
 	private int m_Id;
 	private float m_FrontExtent;
 	private float m_RearExtent;
-	private CarController m_Car;
+	private DemoCarController m_Car;
 	private bool m_PlayerTookOver;   // a player has driven this car → it's theirs now; the AI never reclaims it
 	private AIState m_State = AIState.Normal;
 	private float m_BlockedTime;     // seconds blocked by an entity (patience timer)
@@ -155,7 +155,7 @@ public sealed class TrafficVehicle : Component
 		ComputeForwardExtents();
 		
 		// If the spawned prefab is a real physics car, we drive it through its controller instead of on rails.
-		m_Car = GetComponent<CarController>();
+		m_Car = GetComponent<DemoCarController>();
 	}
 
 

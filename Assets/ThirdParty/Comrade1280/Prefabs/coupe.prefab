@@ -1,11 +1,11 @@
 {
   "RootObject": {
-    "__guid": "28b669cd-5714-4999-9622-5ed8fa6793e1",
+    "__guid": "aa3b76ce-b2fb-4fc9-8526-387f739bf5ed",
     "__version": 2,
     "Flags": 0,
-    "Name": "compact",
+    "Name": "coupe",
     "Position": "0,0,0",
-    "Rotation": "0,0,0,1",
+    "Rotation": "0,0,0,0.99999994",
     "Scale": "1,1,1",
     "Tags": "vehicle",
     "Enabled": true,
@@ -17,7 +17,7 @@
     "Components": [
       {
         "__type": "Sandbox.ModelRenderer",
-        "__guid": "0e4ab282-b405-488d-ae07-25f8a5d70f0a",
+        "__guid": "9058b6d0-d94b-405f-bf22-512bdeb989f7",
         "__enabled": true,
         "Flags": 0,
         "BodyGroups": 18446744073709551615,
@@ -26,7 +26,7 @@
         "MaterialGroup": null,
         "MaterialOverride": null,
         "Materials": null,
-        "Model": "thirdparty/comrade1280/models/compact/compact.vmdl",
+        "Model": "thirdparty/comrade1280/models/coupe/coupe.vmdl",
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,
@@ -44,14 +44,14 @@
       },
       {
         "__type": "Sandbox.ModelCollider",
-        "__guid": "8f677975-4447-4503-aff5-29b98b0f7db3",
+        "__guid": "fc4680ef-c144-4a0e-91b9-9ac7dbf296eb",
         "__enabled": true,
         "Flags": 0,
         "ColliderFlags": 0,
         "Elasticity": null,
         "Friction": null,
         "IsTrigger": false,
-        "Model": "thirdparty/comrade1280/models/compact/compact.vmdl",
+        "Model": "thirdparty/comrade1280/models/coupe/coupe.vmdl",
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
         "OnComponentEnabled": null,
@@ -64,12 +64,12 @@
         "OnTriggerExit": null,
         "RollingResistance": null,
         "Static": false,
-        "Surface": null,
+        "Surface": "surfaces/metal.sheet.surface",
         "SurfaceVelocity": "0,0,0"
       },
       {
         "__type": "Sandbox.Rigidbody",
-        "__guid": "55467e76-3b06-43d3-9d58-901155f1ae1b",
+        "__guid": "6a810a3f-5df9-4fd9-9e54-33cd5d428795",
         "__enabled": true,
         "Flags": 0,
         "AngularDamping": 4,
@@ -104,7 +104,7 @@
       },
       {
         "__type": "RedSnail.RoadTool.TrafficVehicle",
-        "__guid": "290efc2f-9bea-4acd-b60c-0720d54670ed",
+        "__guid": "1c58db9c-f02b-499a-ad37-681540c70f7a",
         "__enabled": true,
         "Flags": 0,
         "OnComponentDestroy": null,
@@ -115,16 +115,15 @@
         "OnComponentUpdate": null
       },
       {
-        "__type": "RedSnail.RoadTool.CarController",
-        "__guid": "6f53c73b-14ad-441a-9ebf-f66a5b3c5c42",
+        "__type": "RedSnail.RoadTool.DemoCarController",
+        "__guid": "95da25d8-c9c5-45e7-960c-eb9d7032e8b3",
         "__enabled": true,
         "Flags": 0,
-        "AccelerationRate": 10,
+        "AccelerationRate": 15,
         "AngularDamping": 6,
         "BrakingRate": 5,
         "DecelerationRate": 1,
-        "DriverSeat": null,
-        "EnginePower": 500000,
+        "EnginePower": 800000,
         "HandbrakeAction": "Jump",
         "HandbrakeAngularDamping": 0.1,
         "OnComponentDestroy": null,
@@ -134,16 +133,62 @@
         "OnComponentStart": null,
         "OnComponentUpdate": null,
         "ReverseTopSpeed": 500,
-        "TopSpeed": 1500
+        "TopSpeed": 1800
+      },
+      {
+        "__type": "RedSnail.RoadTool.DemoSeat",
+        "__guid": "7dc9d1af-88dc-42fd-b09b-557d02cee794",
+        "__enabled": true,
+        "Flags": 0,
+        "ExitPoints": [
+          {
+            "_type": "gameobject",
+            "go": "6d8f9a03-f113-4f31-b6a8-34b5fb99bf27"
+          }
+        ],
+        "EyePosition": {
+          "_type": "gameobject",
+          "go": "29b72668-2618-433a-b2c5-0c5dfb731c4d"
+        },
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null,
+        "PitchRange": "-20,80",
+        "SeatPosition": {
+          "_type": "gameobject",
+          "go": "16dc9548-a1a0-47ae-bbff-4dcd716211eb"
+        },
+        "SitHeight": 0,
+        "SitPose": "Chair",
+        "TooltipDescription": "",
+        "TooltipIcon": "airline_seat_recline_normal",
+        "TooltipTitle": "Drive",
+        "YawRange": "-Infinity,Infinity"
+      },
+      {
+        "__type": "EntityFade",
+        "__guid": "b9ce9cbb-9d46-4d3c-9f89-23f536383bae",
+        "__enabled": true,
+        "Flags": 0,
+        "Duration": 0.5,
+        "OnComponentDestroy": null,
+        "OnComponentDisabled": null,
+        "OnComponentEnabled": null,
+        "OnComponentFixedUpdate": null,
+        "OnComponentStart": null,
+        "OnComponentUpdate": null
       }
     ],
     "Children": [
       {
-        "__guid": "788bd921-c8c9-48b4-8464-a41578d13cbd",
+        "__guid": "bf151a0d-1e5c-47b4-8bee-7a1253e344fb",
         "__version": 2,
         "Flags": 0,
         "Name": "fr_wheel",
-        "Position": "54.9097214,30.7441597,13.3083296",
+        "Position": "67.7945023,37.2935982,16.7709999",
         "Rotation": "0,0,0,1",
         "Scale": "1,1,1",
         "Tags": "",
@@ -155,18 +200,24 @@
         "OwnerTransfer": 1,
         "Components": [
           {
-            "__type": "RedSnail.RoadTool.Wheel",
-            "__guid": "97c31fff-f842-4585-b4dd-2f53d00635ac",
+            "__type": "RedSnail.RoadTool.DemoWheel",
+            "__guid": "5090e713-f27a-445a-967a-28d9064d1f68",
             "__enabled": true,
             "Flags": 0,
             "CanSteer": true,
-            "ExtraWheelDetectionDistance": 7,
+            "ExtraWheelDetectionDistance": 8.5,
             "ForwardFriction": {
-              "ExtremumSlip": 1,
-              "ExtremumValue": 320,
-              "AsymptoteSlip": 2,
-              "AsymptoteValue": 160,
-              "Stiffness": 1.2
+              "$compiler": "embed",
+              "$source": null,
+              "data": {
+                "ExtremumSlip": 1,
+                "ExtremumValue": 320,
+                "AsymptoteSlip": 2,
+                "AsymptoteValue": 160,
+                "Stiffness": 1.2,
+                "__references": null
+              },
+              "compiled": null
             },
             "GripMultiplier": 1,
             "Inverted": false,
@@ -185,23 +236,29 @@
             "OnComponentUpdate": null,
             "PhysicMethod": "ThreeDimensions",
             "SideFriction": {
-              "ExtremumSlip": 0.5,
-              "ExtremumValue": 640,
-              "AsymptoteSlip": 1,
-              "AsymptoteValue": 320,
-              "Stiffness": 1
+              "$compiler": "embed",
+              "$source": null,
+              "data": {
+                "ExtremumSlip": 0.5,
+                "ExtremumValue": 640,
+                "AsymptoteSlip": 1,
+                "AsymptoteValue": 320,
+                "Stiffness": 1,
+                "__references": null
+              },
+              "compiled": null
             },
             "SteeringSmoothness": 10,
             "SteeringWheel": null,
             "SuspensionDamping": 15,
             "SuspensionStiffness": 250,
-            "WheelRadius": 14,
-            "WheelWidth": 7
+            "WheelRadius": 17,
+            "WheelWidth": 14
           }
         ],
         "Children": [
           {
-            "__guid": "a43a3d59-1324-4a26-bcdd-a13b9b90b8e4",
+            "__guid": "e19384cb-0f24-4c6b-9251-49bd993d4ee4",
             "__version": 2,
             "Flags": 0,
             "Name": "model",
@@ -218,7 +275,7 @@
             "Components": [
               {
                 "__type": "Sandbox.ModelRenderer",
-                "__guid": "3e1f0de3-1d25-4751-b6e9-3093daf22cb4",
+                "__guid": "5d1c2a56-9648-47cd-82aa-9dcd000b1019",
                 "__enabled": true,
                 "Flags": 0,
                 "BodyGroups": 18446744073709551615,
@@ -227,7 +284,7 @@
                 "MaterialGroup": null,
                 "MaterialOverride": null,
                 "Materials": null,
-                "Model": "thirdparty/comrade1280/models/compact/wheel.vmdl",
+                "Model": "thirdparty/comrade1280/models/coupe/wheel.vmdl",
                 "OnComponentDestroy": null,
                 "OnComponentDisabled": null,
                 "OnComponentEnabled": null,
@@ -249,11 +306,11 @@
         ]
       },
       {
-        "__guid": "b81924ca-fe7a-4a2d-bae4-7ec8098d7dd3",
+        "__guid": "b6a724f9-aa5a-4ed5-8834-dc26d6313424",
         "__version": 2,
         "Flags": 0,
         "Name": "fl_wheel",
-        "Position": "54.9097214,-30.7441597,13.3083296",
+        "Position": "67.7949982,-37.2939987,16.7709999",
         "Rotation": "0,0,0,1",
         "Scale": "1,1,1",
         "Tags": "",
@@ -265,18 +322,24 @@
         "OwnerTransfer": 1,
         "Components": [
           {
-            "__type": "RedSnail.RoadTool.Wheel",
-            "__guid": "5409dfe3-4d43-4836-8138-7afc32bd0764",
+            "__type": "RedSnail.RoadTool.DemoWheel",
+            "__guid": "96e34f3c-3881-469d-a0bc-8002c3141f27",
             "__enabled": true,
             "Flags": 0,
             "CanSteer": true,
-            "ExtraWheelDetectionDistance": 7,
+            "ExtraWheelDetectionDistance": 8.5,
             "ForwardFriction": {
-              "ExtremumSlip": 1,
-              "ExtremumValue": 320,
-              "AsymptoteSlip": 2,
-              "AsymptoteValue": 160,
-              "Stiffness": 1.2
+              "$compiler": "embed",
+              "$source": null,
+              "data": {
+                "ExtremumSlip": 1,
+                "ExtremumValue": 320,
+                "AsymptoteSlip": 2,
+                "AsymptoteValue": 160,
+                "Stiffness": 1.2,
+                "__references": null
+              },
+              "compiled": null
             },
             "GripMultiplier": 1,
             "Inverted": true,
@@ -295,23 +358,29 @@
             "OnComponentUpdate": null,
             "PhysicMethod": "ThreeDimensions",
             "SideFriction": {
-              "ExtremumSlip": 0.5,
-              "ExtremumValue": 640,
-              "AsymptoteSlip": 1,
-              "AsymptoteValue": 320,
-              "Stiffness": 1
+              "$compiler": "embed",
+              "$source": null,
+              "data": {
+                "ExtremumSlip": 0.5,
+                "ExtremumValue": 640,
+                "AsymptoteSlip": 1,
+                "AsymptoteValue": 320,
+                "Stiffness": 1,
+                "__references": null
+              },
+              "compiled": null
             },
             "SteeringSmoothness": 10,
             "SteeringWheel": null,
             "SuspensionDamping": 15,
             "SuspensionStiffness": 250,
-            "WheelRadius": 14,
-            "WheelWidth": 7
+            "WheelRadius": 17,
+            "WheelWidth": 14
           }
         ],
         "Children": [
           {
-            "__guid": "527da886-12e4-4431-80bd-e53087ab0187",
+            "__guid": "042f15ce-971e-4d5d-86bd-1f5b7f549e7a",
             "__version": 2,
             "Flags": 0,
             "Name": "model",
@@ -328,7 +397,7 @@
             "Components": [
               {
                 "__type": "Sandbox.ModelRenderer",
-                "__guid": "2efaa18b-da0a-499a-b666-9bba570e033f",
+                "__guid": "d0c0ba03-e125-4060-b9e3-e920136d3764",
                 "__enabled": true,
                 "Flags": 0,
                 "BodyGroups": 18446744073709551615,
@@ -337,7 +406,7 @@
                 "MaterialGroup": null,
                 "MaterialOverride": null,
                 "Materials": null,
-                "Model": "thirdparty/comrade1280/models/compact/wheel.vmdl",
+                "Model": "thirdparty/comrade1280/models/coupe/wheel.vmdl",
                 "OnComponentDestroy": null,
                 "OnComponentDisabled": null,
                 "OnComponentEnabled": null,
@@ -359,11 +428,11 @@
         ]
       },
       {
-        "__guid": "e0b78a00-b806-4ba2-8bfd-aa60ad1af32f",
+        "__guid": "5ad988e5-5fab-4d37-af62-0bf8657036f9",
         "__version": 2,
         "Flags": 0,
         "Name": "rl_wheel",
-        "Position": "-62.285881,-30.7441597,13.3083296",
+        "Position": "-67.7949982,-37.2939987,16.7709999",
         "Rotation": "0,0,0,1",
         "Scale": "1,1,1",
         "Tags": "",
@@ -375,18 +444,24 @@
         "OwnerTransfer": 1,
         "Components": [
           {
-            "__type": "RedSnail.RoadTool.Wheel",
-            "__guid": "30b324a7-3b0f-4665-ab60-7bf8527c981e",
+            "__type": "RedSnail.RoadTool.DemoWheel",
+            "__guid": "86123a49-4c28-4bfd-a13b-1a1ea7c24d99",
             "__enabled": true,
             "Flags": 0,
             "CanSteer": false,
-            "ExtraWheelDetectionDistance": 7,
+            "ExtraWheelDetectionDistance": 8.5,
             "ForwardFriction": {
-              "ExtremumSlip": 1,
-              "ExtremumValue": 320,
-              "AsymptoteSlip": 2,
-              "AsymptoteValue": 160,
-              "Stiffness": 1.2
+              "$compiler": "embed",
+              "$source": null,
+              "data": {
+                "ExtremumSlip": 1,
+                "ExtremumValue": 320,
+                "AsymptoteSlip": 2,
+                "AsymptoteValue": 160,
+                "Stiffness": 1.2,
+                "__references": null
+              },
+              "compiled": null
             },
             "GripMultiplier": 1,
             "Inverted": true,
@@ -405,23 +480,29 @@
             "OnComponentUpdate": null,
             "PhysicMethod": "ThreeDimensions",
             "SideFriction": {
-              "ExtremumSlip": 0.5,
-              "ExtremumValue": 640,
-              "AsymptoteSlip": 1,
-              "AsymptoteValue": 320,
-              "Stiffness": 1
+              "$compiler": "embed",
+              "$source": null,
+              "data": {
+                "ExtremumSlip": 0.5,
+                "ExtremumValue": 640,
+                "AsymptoteSlip": 1,
+                "AsymptoteValue": 320,
+                "Stiffness": 1,
+                "__references": null
+              },
+              "compiled": null
             },
             "SteeringSmoothness": 10,
             "SteeringWheel": null,
             "SuspensionDamping": 15,
             "SuspensionStiffness": 250,
-            "WheelRadius": 14,
-            "WheelWidth": 7
+            "WheelRadius": 17,
+            "WheelWidth": 14
           }
         ],
         "Children": [
           {
-            "__guid": "b6376d79-28ea-4027-aaf7-c7b44950c90c",
+            "__guid": "0683495f-9d0f-40ac-91b6-2d2c7d6971c3",
             "__version": 2,
             "Flags": 0,
             "Name": "model",
@@ -438,7 +519,7 @@
             "Components": [
               {
                 "__type": "Sandbox.ModelRenderer",
-                "__guid": "f8ae5d65-010a-4603-b46d-6fee086b606c",
+                "__guid": "4fbd77fd-72c5-4d84-8511-3ce2ec3512b1",
                 "__enabled": true,
                 "Flags": 0,
                 "BodyGroups": 18446744073709551615,
@@ -447,7 +528,7 @@
                 "MaterialGroup": null,
                 "MaterialOverride": null,
                 "Materials": null,
-                "Model": "thirdparty/comrade1280/models/compact/wheel.vmdl",
+                "Model": "thirdparty/comrade1280/models/coupe/wheel.vmdl",
                 "OnComponentDestroy": null,
                 "OnComponentDisabled": null,
                 "OnComponentEnabled": null,
@@ -469,11 +550,11 @@
         ]
       },
       {
-        "__guid": "826f9156-e217-4a9a-8dec-3c1a10591c5a",
+        "__guid": "d8fdd7ff-fbd1-4e9d-9a1f-7eaba560a56e",
         "__version": 2,
         "Flags": 0,
         "Name": "rr_wheel",
-        "Position": "-62.285881,30.7441597,13.3083296",
+        "Position": "-67.7949982,37.2939987,16.7709999",
         "Rotation": "0,0,0,1",
         "Scale": "1,1,1",
         "Tags": "",
@@ -485,18 +566,24 @@
         "OwnerTransfer": 1,
         "Components": [
           {
-            "__type": "RedSnail.RoadTool.Wheel",
-            "__guid": "61fa2cd9-3a91-4b0d-8e83-7fb9b8e10123",
+            "__type": "RedSnail.RoadTool.DemoWheel",
+            "__guid": "b25c8a06-e875-4d5b-9d83-bb41390d8cbe",
             "__enabled": true,
             "Flags": 0,
             "CanSteer": false,
-            "ExtraWheelDetectionDistance": 7,
+            "ExtraWheelDetectionDistance": 8.5,
             "ForwardFriction": {
-              "ExtremumSlip": 1,
-              "ExtremumValue": 320,
-              "AsymptoteSlip": 2,
-              "AsymptoteValue": 160,
-              "Stiffness": 1.2
+              "$compiler": "embed",
+              "$source": null,
+              "data": {
+                "ExtremumSlip": 1,
+                "ExtremumValue": 320,
+                "AsymptoteSlip": 2,
+                "AsymptoteValue": 160,
+                "Stiffness": 1.2,
+                "__references": null
+              },
+              "compiled": null
             },
             "GripMultiplier": 1,
             "Inverted": false,
@@ -515,23 +602,29 @@
             "OnComponentUpdate": null,
             "PhysicMethod": "ThreeDimensions",
             "SideFriction": {
-              "ExtremumSlip": 0.5,
-              "ExtremumValue": 640,
-              "AsymptoteSlip": 1,
-              "AsymptoteValue": 320,
-              "Stiffness": 1
+              "$compiler": "embed",
+              "$source": null,
+              "data": {
+                "ExtremumSlip": 0.5,
+                "ExtremumValue": 640,
+                "AsymptoteSlip": 1,
+                "AsymptoteValue": 320,
+                "Stiffness": 1,
+                "__references": null
+              },
+              "compiled": null
             },
             "SteeringSmoothness": 10,
             "SteeringWheel": null,
             "SuspensionDamping": 15,
             "SuspensionStiffness": 250,
-            "WheelRadius": 14,
-            "WheelWidth": 7
+            "WheelRadius": 17,
+            "WheelWidth": 14
           }
         ],
         "Children": [
           {
-            "__guid": "e5896471-e090-4bd8-a22d-bb8f267e8e9a",
+            "__guid": "6b833737-8f84-4a68-88ca-cc733d787159",
             "__version": 2,
             "Flags": 0,
             "Name": "model",
@@ -548,7 +641,7 @@
             "Components": [
               {
                 "__type": "Sandbox.ModelRenderer",
-                "__guid": "485dabc5-668d-4de5-b08c-41a75fde0090",
+                "__guid": "926c4f59-6bd7-4755-bdd1-e9f8236e601c",
                 "__enabled": true,
                 "Flags": 0,
                 "BodyGroups": 18446744073709551615,
@@ -557,7 +650,7 @@
                 "MaterialGroup": null,
                 "MaterialOverride": null,
                 "Materials": null,
-                "Model": "thirdparty/comrade1280/models/compact/wheel.vmdl",
+                "Model": "thirdparty/comrade1280/models/coupe/wheel.vmdl",
                 "OnComponentDestroy": null,
                 "OnComponentDisabled": null,
                 "OnComponentEnabled": null,
@@ -579,11 +672,11 @@
         ]
       },
       {
-        "__guid": "3b9d2c15-b7f0-4256-83f1-187f8b3080bf",
+        "__guid": "16dc9548-a1a0-47ae-bbff-4dcd716211eb",
         "__version": 2,
         "Flags": 0,
         "Name": "driverseat",
-        "Position": "0,15,10",
+        "Position": "-10,20,10",
         "Rotation": "0,0,0,1",
         "Scale": "1,1,1",
         "Tags": "",
@@ -593,43 +686,10 @@
         "NetworkOrphaned": 0,
         "NetworkTransmit": true,
         "OwnerTransfer": 1,
-        "Components": [
-          {
-            "__type": "RedSnail.RoadTool.VehicleSeat",
-            "__guid": "254769d9-f1ee-46ca-bfd3-82d7b84cf362",
-            "__enabled": true,
-            "Flags": 0,
-            "ExitPoints": [
-              {
-                "_type": "gameobject",
-                "go": "9762608e-125c-44fa-9eaf-5b1388e5e928"
-              }
-            ],
-            "EyePosition": {
-              "_type": "gameobject",
-              "go": "ff783d98-2a9b-429d-8252-be000c4d37c7"
-            },
-            "OnComponentDestroy": null,
-            "OnComponentDisabled": null,
-            "OnComponentEnabled": null,
-            "OnComponentFixedUpdate": null,
-            "OnComponentStart": null,
-            "OnComponentUpdate": null,
-            "PitchRange": "-20,80",
-            "SeatPosition": null,
-            "SitHeight": 0,
-            "SitPose": "Chair",
-            "TooltipDescription": "",
-            "TooltipIcon": "airline_seat_recline_normal",
-            "TooltipTitle": "Sit",
-            "UseAction": "use",
-            "UseReach": 160,
-            "YawRange": "-Infinity,Infinity"
-          }
-        ],
+        "Components": [],
         "Children": [
           {
-            "__guid": "ff783d98-2a9b-429d-8252-be000c4d37c7",
+            "__guid": "29b72668-2618-433a-b2c5-0c5dfb731c4d",
             "__version": 2,
             "Flags": 0,
             "Name": "eyepos",
@@ -649,11 +709,11 @@
         ]
       },
       {
-        "__guid": "9762608e-125c-44fa-9eaf-5b1388e5e928",
+        "__guid": "6d8f9a03-f113-4f31-b6a8-34b5fb99bf27",
         "__version": 2,
         "Flags": 0,
         "Name": "leftdoor",
-        "Position": "0,55,0",
+        "Position": "0,70,0",
         "Rotation": "0,0,0,1",
         "Scale": "1,1,1",
         "Tags": "",

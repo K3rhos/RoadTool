@@ -18,8 +18,8 @@ Layer0
 	//---- Color ----
 	g_flModelTintAmount "1.000"
 	g_vColorTint "[1.000000 1.000000 1.000000 0.000000]"
-	TextureColor "thirdparty/comrade1280/textures/compact/compact_diffuse.png"
-	TextureTintMask "thirdparty/comrade1280/textures/compact/compact_tintmask.png"
+	TextureColor "thirdparty/comrade1280/textures/coupe/coupe_diffuse.png"
+	TextureTintMask "thirdparty/comrade1280/textures/coupe/coupe_tintmask.png"
 
 	//---- Fade ----
 	g_flFadeExponent "1.000"
@@ -35,7 +35,7 @@ Layer0
 
 	//---- Roughness ----
 	g_flRoughnessScaleFactor "1.000"
-	TextureRoughness "thirdparty/comrade1280/textures/compact/compact_glossiness.png"
+	TextureRoughness "thirdparty/comrade1280/textures/coupe/coupe_glossiness.png"
 
 	//---- Texture Coordinates ----
 	g_vTexCoordOffset "[0.000 0.000]"

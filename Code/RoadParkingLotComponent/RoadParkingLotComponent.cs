@@ -165,6 +165,8 @@ public partial class RoadParkingLotComponent : Component, Component.ExecuteInEdi
 			GameObject gameObject = SpotPrefab.Clone(new Transform(), containerObject);
 			gameObject.LocalPosition = position;
 			gameObject.LocalRotation = Rotation.FromYaw(SpotAngle);
+			gameObject.NetworkMode = NetworkMode.Object;
+			gameObject.Network.SetOrphanedMode(NetworkOrphaned.Host);
 		}
 	}
 

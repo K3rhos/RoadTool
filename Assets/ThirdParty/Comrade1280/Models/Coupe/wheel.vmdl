@@ -15,7 +15,7 @@
 						[
 							{
 								from = "wheel.vmat"
-								to = "thirdparty/comrade1280/materials/compact/wheel.vmat"
+								to = "thirdparty/comrade1280/materials/coupe/wheel.vmat"
 							},
 						]
 						use_global_default = false
@@ -29,7 +29,7 @@
 				[
 					{
 						_class = "RenderMeshFile"
-						filename = "thirdparty/comrade1280/models/compact/compact.fbx"
+						filename = "thirdparty/comrade1280/models/coupe/coupe.fbx"
 						import_translation = [ 0.0, 0.0, 0.0 ]
 						import_rotation = [ 0.0, 0.0, 0.0 ]
 						import_scale = 0.5
