@@ -4,6 +4,10 @@ namespace RedSnail.RoadTool;
 
 public partial class RoadComponent
 {
+	/// <summary>
+	/// This will prevent the road from being rebuilt if any property is edited or if the road component get disable and re-enabled.
+	/// Really useful if you plan to edit the mesh with the mapping tool so you don't accidently erase/rebuild the road.
+	/// </summary>
 	[Property(Title = "🔒 Locked"), Feature("Road")] private bool IsRoadLocked { get; set; } = false;
 	[Property(Title = "Material"), Feature("Road", Icon = "fork_left", Tint = EditorTint.Green)] private Material RoadMaterial { get; set { field = value; IsDirty = true; } }
 	[Property(Title = "Width"), Feature("Road"), Range(10.0f, 1000.0f)] public float RoadWidth { get; set { field = value; IsDirty = true; } } = 500.0f;

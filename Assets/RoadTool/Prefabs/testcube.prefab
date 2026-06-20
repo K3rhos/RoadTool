@@ -1,6 +1,6 @@
 {
   "RootObject": {
-    "__guid": "bef14d50-1b39-4852-9a28-1671258e0346",
+    "__guid": "28c46f42-8323-482f-931a-f588a27e298c",
     "__version": 2,
     "Flags": 0,
     "Name": "testcube",
@@ -17,7 +17,7 @@
     "Components": [
       {
         "__type": "Sandbox.ModelRenderer",
-        "__guid": "1a919a9e-c3ab-4bb1-946b-05e00139d797",
+        "__guid": "9e9d2ab1-a012-4e3d-b2cd-be9b5f48df74",
         "__enabled": true,
         "Flags": 0,
         "BodyGroups": 18446744073709551615,
@@ -44,7 +44,7 @@
       },
       {
         "__type": "Sandbox.BoxCollider",
-        "__guid": "00cffd52-61f0-4d10-bdf4-0ddb92bb7de7",
+        "__guid": "b0c30694-6bf2-4b1f-ba5c-fccd9f3b8a4b",
         "__enabled": true,
         "Flags": 0,
         "Center": "0,0,0",
@@ -69,28 +69,7 @@
         "SurfaceVelocity": "0,0,0"
       }
     ],
-    "Children": [],
-    "__properties": {
-      "NetworkInterpolation": true,
-      "TimeScale": 1,
-      "WantsSystemScene": true,
-      "Metadata": {},
-      "NavMesh": {
-        "Enabled": false,
-        "IncludeStaticBodies": true,
-        "IncludeKeyframedBodies": true,
-        "EditorAutoUpdate": false,
-        "AgentHeight": 64,
-        "AgentRadius": 16,
-        "AgentStepSize": 18,
-        "AgentMaxSlope": 40,
-        "ExcludedBodies": "",
-        "IncludedBodies": "",
-        "DeferGeneration": false,
-        "CustomBounds": false
-      }
-    },
-    "__variables": []
+    "Children": []
   },
   "ResourceVersion": 2,
   "ShowInMenu": false,

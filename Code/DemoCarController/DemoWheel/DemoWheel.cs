@@ -400,7 +400,7 @@ public sealed class DemoWheel : Component
 		float totalForce = (dampingForce + springForce);
 
 		Vector3 suspensionForce = suspensionDir * totalForce;
-		
+
 		m_Rigidbody.ApplyForceAt(WorldPosition, suspensionForce);
 	}
 	
@@ -506,7 +506,7 @@ public sealed class DemoWheel : Component
 		if (!Game.IsPlaying)
 			return;
 		
-		if (!RoadManager.Current.ShowLayoutOverlays)
+		if (!RoadManager.Current.ShowOverlays)
 			return;
 		
 		if (Scene.Camera.IsValid()

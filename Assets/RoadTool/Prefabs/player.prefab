@@ -54,7 +54,7 @@
         },
         "FootstepVolume": 1,
         "HideBodyInFirstPerson": true,
-        "JumpSpeed": 800,
+        "JumpSpeed": 300,
         "LookSensitivity": 1,
         "OnComponentDestroy": null,
         "OnComponentDisabled": null,
@@ -74,7 +74,7 @@
         "RotationAngleLimit": 45,
         "RotationSpeed": 1,
         "RunByDefault": false,
-        "RunSpeed": 800,
+        "RunSpeed": 320,
         "ShowColliderComponents": false,
         "ShowRigidbodyComponent": false,
         "ThirdPerson": true,
@@ -85,7 +85,7 @@
         "UseFovFromPreferences": true,
         "UseInputControls": true,
         "UseLookControls": true,
-        "WalkSpeed": 300
+        "WalkSpeed": 110
       },
       {
         "__type": "Sandbox.Rigidbody",
@@ -283,7 +283,7 @@
         ],
         "Children": [
           {
-            "__guid": "f50c0be2-482d-4985-992b-edc372579736",
+            "__guid": "dac6c6fa-1205-4c18-8f0c-f493f8865260",
             "__version": 2,
             "Flags": 0,
             "Name": "Clothing - hair_shortscruffy_brown",
@@ -300,7 +300,7 @@
             "Components": [
               {
                 "__type": "Sandbox.SkinnedModelRenderer",
-                "__guid": "37accfa8-efff-4617-8d5d-b122da5228d3",
+                "__guid": "1a7abf9e-6728-4253-a230-8f67b3448dd8",
                 "__enabled": true,
                 "Flags": 0,
                 "AnimationGraph": null,
@@ -352,7 +352,7 @@
             "Children": []
           },
           {
-            "__guid": "5d0123de-d374-404a-88f4-4e204ea595b2",
+            "__guid": "555bad3f-72f3-41bb-9e84-26c5e077dfce",
             "__version": 2,
             "Flags": 0,
             "Name": "Clothing - patchy_beard",
@@ -369,7 +369,7 @@
             "Components": [
               {
                 "__type": "Sandbox.SkinnedModelRenderer",
-                "__guid": "89b4495b-ff2e-43f8-87ae-e32d2ea664b4",
+                "__guid": "58562526-b9f0-4dd3-9c31-c24f2def6507",
                 "__enabled": true,
                 "Flags": 0,
                 "AnimationGraph": null,
@@ -421,7 +421,7 @@
             "Children": []
           },
           {
-            "__guid": "260c235c-e208-477f-8157-7db8b2beb7ab",
+            "__guid": "a81c98f4-5abb-42bb-8561-42ec7223f051",
             "__version": 2,
             "Flags": 0,
             "Name": "Clothing - blue_shirt",
@@ -438,7 +438,7 @@
             "Components": [
               {
                 "__type": "Sandbox.SkinnedModelRenderer",
-                "__guid": "8e7e1819-7e11-42c5-b5f0-1d82e73786a0",
+                "__guid": "79849c05-8985-4c71-a685-7bae793b4fa7",
                 "__enabled": true,
                 "Flags": 0,
                 "AnimationGraph": null,
@@ -490,7 +490,7 @@
             "Children": []
           },
           {
-            "__guid": "f6d09116-5f6b-4770-a00c-b034d8a2ba1d",
+            "__guid": "74b16f55-9359-4aeb-9ac5-cdf0b5e88080",
             "__version": 2,
             "Flags": 0,
             "Name": "Clothing - sneakers",
@@ -507,7 +507,7 @@
             "Components": [
               {
                 "__type": "Sandbox.SkinnedModelRenderer",
-                "__guid": "1a77e1d2-6a45-4925-8bee-ef6c5ff9eeed",
+                "__guid": "fdecc09b-c9e9-4223-b124-24fa5583f168",
                 "__enabled": true,
                 "Flags": 0,
                 "AnimationGraph": null,
@@ -559,7 +559,7 @@
             "Children": []
           },
           {
-            "__guid": "1c5cc501-a330-4837-934c-8b04e0e58cfc",
+            "__guid": "3f2903cc-db17-4959-889c-d77af12cfbe8",
             "__version": 2,
             "Flags": 0,
             "Name": "Clothing - jeans",
@@ -576,7 +576,7 @@
             "Components": [
               {
                 "__type": "Sandbox.SkinnedModelRenderer",
-                "__guid": "952a179d-87a3-4a22-94a4-89b9a66602eb",
+                "__guid": "cfeb0173-e410-4ba4-8a51-1532893c9d1f",
                 "__enabled": true,
                 "Flags": 0,
                 "AnimationGraph": null,

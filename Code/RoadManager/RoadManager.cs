@@ -11,12 +11,14 @@ namespace RedSnail.RoadTool;
 /// In play mode it spawns vehicle-prefab instances that drive the network; in the editor it draws the computed layout.
 /// </summary>
 [Icon("directions_car")]
-public sealed class RoadManager : Component, Component.ExecuteInEditor
+public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotloadManaged
 {
 	private const float TrafficStreamInterval = 0.25f; // seconds between streaming passes (despawn strays, top up near players)
 	private const int MaxSpawnsPerTick = 5;            // cap cars spawned per pass so a fresh area fills in gradually, not in one burst
 
-	[Property, Feature("Traffic"), Category("Vehicles")] private VehicleSetResource VehicleSet { get; set; }
+	[SkipHotload] public static RoadManager Current { get; private set; } = null;
+	
+	[Property, Feature("Traffic", Icon = "traffic"), Category("Vehicles")] private VehicleSetResource VehicleSet { get; set; }
 	[Property(Title = "Default Speed"), Feature("Traffic"), Category("Vehicles"), Range(5.0f, 130.0f)] private float DefaultSpeed { get; set; } = 30.0f;
 	[Property(Title = "Following Gap"), Feature("Traffic"), Category("Vehicles"), Range(50.0f, 600.0f)] private float VehicleSpacing { get; set; } = 180.0f;
 	[Property(Title = "Spawn Gap"), Feature("Traffic"), Category("Vehicles"), Range(50.0f, 1000.0f)] private float SpawnGap { get; set; } = 250.0f;
@@ -37,13 +39,11 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 	[Property, Feature("Traffic"), Category("Layout"), Range(50.0f, 500.0f)] private float WaypointSpacing { get; set { field = value.Clamp(10.0f, 10000.0f); m_IsDirty = true; } } = 150.0f;
 	[Property(Title = "Connection Distance"), Feature("Traffic"), Category("Layout"), Range(20.0f, 600.0f)] private float LinkThreshold { get; set { field = value; m_IsDirty = true; } } = 200.0f;
 
-	[Property, Feature("Traffic"), Category("Debug")] private bool ShowLayoutGizmos { get; set; } = true;
-	[Property, Feature("Traffic"), Category("Debug")] public bool ShowLayoutOverlays { get; set; } = true;
+	[Property, Feature("Debug", Icon = "bug_report", Tint = EditorTint.Red)] private bool ShowGizmos { get; set; } = true;
+	[Property, Feature("Debug")] public bool ShowOverlays { get; set; } = true;
 
-	[Property, Feature("Parking Lot")] public float ParkedVehicleDespawnDistance { get; set; } = 6000.0f;
+	[Property, Feature("Parking Lot", Icon = "local_parking", Tint = EditorTint.Yellow)] public float ParkedVehicleDespawnDistance { get; set; } = 6000.0f;
 	[Property, Feature("Parking Lot")] public float ParkedVehicleRespawnDistance { get; set; } = 4000.0f;
-	
-	public static RoadManager Current { get; set; }
 
 	/// <summary>
 	/// Optional override for how the library locates players. Set this from your game to feed players in from your own
@@ -56,7 +56,6 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 	private RoadTrafficGraph m_Graph;
 	private readonly List<TrafficVehicle> m_Vehicles = [];
 	private readonly List<(TrafficLane Lane, int Index)> m_SpawnSlots = []; // candidate spawn points along the lanes, rebuilt with the graph
-	private readonly System.Random m_Rng = new();
 	private bool m_IsDirty = true;
 	private float m_TrafficStreamCooldown;
 
@@ -67,14 +66,34 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 		WaypointSpacing = WaypointSpacing,
 		LinkThreshold = LinkThreshold
 	};
+	
+	
+	
+	protected override void OnAwake()
+	{
+		Current ??= this;
+	}
+	
+	
+	
+	void IHotloadManaged.Destroyed(Dictionary<string, object> _State)
+	{
+		_State["IsActive"] = Current == this;
+	}
 
 
 
+	void IHotloadManaged.Created(IReadOnlyDictionary<string, object> _State)
+	{
+		if (_State.GetValueOrDefault("IsActive") is true)
+			Current = this;
+	}
+	
+	
+	
 	protected override void OnEnabled()
 	{
 		m_IsDirty = true;
-
-		Current ??= this;
 	}
 
 
@@ -222,7 +241,17 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 
 			if (NearestDistanceSq(vehicle.WorldPosition, _Players) > despawnSq)
 			{
-				vehicle.DestroyGameObject();
+				var entityFade = vehicle.GetComponent<EntityFade>();
+
+				if (entityFade.IsValid())
+				{
+					entityFade.FadeOutAndDestroy();
+				}
+				else
+				{
+					vehicle.DestroyGameObject();
+				}
+				
 				m_Vehicles.RemoveAt(i);
 			}
 		}
@@ -264,7 +293,7 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 
 		// Walk the slots from a random offset so we don't always favour the same lanes, spawning at any that sit in the
 		// ring (near enough to matter, far enough not to pop in) and aren't already occupied by another car.
-		int start = m_Rng.Next(m_SpawnSlots.Count);
+		int start = Game.Random.Next(m_SpawnSlots.Count);
 
 		for (int n = 0; n < m_SpawnSlots.Count && deficit > 0; n++)
 		{
@@ -312,7 +341,7 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 
 	private void DrawLayoutDebugOverlay()
 	{
-		if (!ShowLayoutOverlays)
+		if (!ShowOverlays)
 			return;
 		
 		Vector3 offset = Vector3.Up * 25;
@@ -413,7 +442,7 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 	private void SpawnVehicleAt(TrafficLane _Lane, int _Index)
 	{
 		Vector3 spawnPos = _Lane.Waypoints[_Index] + Vector3.Up * SpawnHeightOffset;
-		GameObject prefab = VehicleSet.Prefabs[m_Rng.Next(VehicleSet.Prefabs.Length)];
+		GameObject prefab = VehicleSet.Prefabs[Game.Random.Next(VehicleSet.Prefabs.Length)];
 		GameObject clone = prefab.Clone(spawnPos, Rotation.Identity, Vector3.One);
 
 		if (!clone.IsValid())
@@ -421,7 +450,8 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 
 		clone.NetworkSpawn(Connection.Host);
 		clone.Network.SetOrphanedMode(NetworkOrphaned.Host);
-
+		clone.Network.SetOwnerTransfer(OwnerTransfer.Request);
+		
 		// The prefab is just the visual/body — the manager attaches the driver and points it at its lane.
 		var vehicle = clone.GetOrAddComponent<TrafficVehicle>();
 		vehicle.DefaultSpeed = DefaultSpeed * TrafficMath.KmhToUnits;
@@ -433,14 +463,16 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 		vehicle.Neighbors = m_Vehicles;
 		vehicle.AwareTags = AwarenessTags;
 		vehicle.DetectRadius = AwarenessRadius;
-		vehicle.Initialize(m_Graph, _Lane, _Index, m_Rng.Next());
+		vehicle.Initialize(m_Graph, _Lane, _Index, Game.Random.Next());
 
 		var renderer = clone.GetComponent<ModelRenderer>();
 
 		// Give it a cool random tint
 		if (renderer.IsValid())
-			renderer.Tint = new Color(m_Rng.NextSingle(), m_Rng.NextSingle(), m_Rng.NextSingle(), renderer.Tint.a);
+			renderer.Tint = new Color(Game.Random.NextSingle(), Game.Random.NextSingle(), Game.Random.NextSingle(), renderer.Tint.a);
 
+		Network.Refresh(renderer);
+		
 		m_Vehicles.Add(vehicle);
 	}
 	
@@ -458,7 +490,7 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor
 
 	protected override void DrawGizmos()
 	{
-		if (!ShowLayoutGizmos || !Gizmo.IsSelected || m_Graph is null)
+		if (!ShowGizmos || !Gizmo.IsSelected || m_Graph is null)
 			return;
 
 		Gizmo.Draw.LineThickness = 2.0f;

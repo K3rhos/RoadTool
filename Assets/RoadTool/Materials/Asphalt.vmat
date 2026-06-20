@@ -1,0 +1,40 @@
+// THIS FILE IS AUTO-GENERATED
+
+Layer0
+{
+	shader "shaders/advancedtriplanar.shader"
+
+	//---- Albedo ----
+	BaseColour "roadtool/textures/asphalt/asphalt_diffuse.jpg"
+	g_flBlendAmount "0.200"
+	g_vBlendColour "[0.392157 0.364706 0.298039 1.000000]"
+
+	//---- Ambient Occlusion ----
+	AmbientOcclusion "materials/default/default_ao.tga"
+
+	//---- Emission ----
+	Emission "materials/default/default_selfillum.tga"
+	g_flEmissionTintBlend "0.000"
+	g_flEmissionTintBoost "1.000"
+	g_vEmissionTint "[1.000000 1.000000 1.000000 1.000000]"
+
+	//---- Fog ----
+	g_bFogEnabled "1"
+
+	//---- General ----
+	g_bFollowWorldSpace "1"
+	g_bUseObjectSpace "0"
+	g_vOffset "[0.000 0.000]"
+	g_vTile "[4.000 4.000]"
+
+	//---- Metalness ----
+	Metalness "materials/default/default_metal.tga"
+
+	//---- Normal ----
+	g_flNormalStrength "1.000"
+	NormalMap "roadtool/textures/asphalt/asphalt_normal.jpg"
+
+	//---- Roughness ----
+	g_flRoughnessScaleFactor "0.750"
+	Roughness "roadtool/textures/asphalt/asphalt_roughness.jpg"
+}

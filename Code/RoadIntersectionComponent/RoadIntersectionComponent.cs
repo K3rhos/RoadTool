@@ -36,7 +36,14 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 	[Property(Title = "Material"), Feature("General"), Category("Sidewalk"), Order(3)] private Material SidewalkMaterial { get; set { field = value; m_IsDirty = true; } }
 	[Property(Title = "Width"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkWidth { get; set { field = value; m_IsDirty = true; } } = 150.0f;
 	[Property(Title = "Height"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkHeight { get; set { field = value; m_IsDirty = true; } } = 5.0f;
+	[Property(Title = "Inner Bevel"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkBevel { get; set { field = value; m_IsDirty = true; } } = 0.0f;
 	[Property(Title = "Texture Repeat"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkTextureRepeat { get; set { field = value; m_IsDirty = true; } } = 200.0f;
+
+	// Inner-edge curb bevel, shared by every sidewalk builder (circle disc, circle exits, rectangle). CurbBevel is the
+	// width the inner-top vertices are pushed OUTWARD by, turning the vertical curb face into a slope; CurbBevelV is that
+	// slope's length in UV space, so the curb-face texture rides the slope instead of stretching. 0 = the old vertical curb.
+	private float CurbBevel => SidewalkBevel.Clamp(0.0f, SidewalkWidth);
+	private float CurbBevelV => new Vector2(CurbBevel, SidewalkHeight).Length / SidewalkTextureRepeat;
 
 
 

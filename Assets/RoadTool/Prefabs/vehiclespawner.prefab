@@ -35,7 +35,7 @@
         },
         "SpawnChance": 30,
         "SpawnOnEnable": true,
-        "Vehicles": "resources/groundvehicles.vset"
+        "Vehicles": "roadtool/resources/groundvehicles.vset"
       }
     ],
     "Children": [],

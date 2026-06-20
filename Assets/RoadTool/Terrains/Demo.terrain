@@ -1,0 +1,25 @@
+{
+  "Maps": {
+    "$blob": "6d181067-eb8f-4f4e-8687-942202133330"
+  },
+  "Resolution": 512,
+  "TerrainSize": 50000,
+  "TerrainHeight": 10000,
+  "Materials": [],
+  "MaterialSettings": {
+    "HeightBlendEnabled": true,
+    "HeightBlendSharpness": 0.87,
+    "Sampler": {
+      "Filter": "Anisotropic",
+      "AddressModeU": "Wrap",
+      "AddressModeV": "Wrap",
+      "AddressModeW": "Wrap",
+      "MipLodBias": 0,
+      "MaxAnisotropy": 8,
+      "BorderColor": "0,0,0,0"
+    }
+  },
+  "ResourceVersion": 3,
+  "__references": [],
+  "__version": 3
+}

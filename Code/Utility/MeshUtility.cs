@@ -23,6 +23,9 @@ public static class MeshUtility
 		HalfEdgeMesh.VertexHandle _C, HalfEdgeMesh.VertexHandle _D,
 		Vector2 _UvA, Vector2 _UvB, Vector2 _UvC, Vector2 _UvD)
 	{
+		if (HasDuplicateVertex(_A, _B, _C, _D))
+			return;
+
 		var face = _Mesh.AddFace(_A, _B, _C, _D);
 
 		if (!face.IsValid)
@@ -39,6 +42,9 @@ public static class MeshUtility
 		HalfEdgeMesh.VertexHandle _C,
 		Vector2 _UvA, Vector2 _UvB, Vector2 _UvC)
 	{
+		if (HasDuplicateVertex(_A, _B, _C))
+			return;
+
 		var face = _Mesh.AddFace(_A, _B, _C);
 
 		if (!face.IsValid)
@@ -46,5 +52,21 @@ public static class MeshUtility
 
 		_Mesh.SetFaceMaterial(face, _Material);
 		_Mesh.SetFaceTextureCoords(face, new List<Vector2> { _UvA, _UvB, _UvC });
+	}
+
+
+
+	private static bool HasDuplicateVertex(HalfEdgeMesh.VertexHandle _A, HalfEdgeMesh.VertexHandle _B, HalfEdgeMesh.VertexHandle _C)
+	{
+		return _A.Equals(_B) || _A.Equals(_C) || _B.Equals(_C);
+	}
+
+
+
+	private static bool HasDuplicateVertex(HalfEdgeMesh.VertexHandle _A, HalfEdgeMesh.VertexHandle _B, HalfEdgeMesh.VertexHandle _C, HalfEdgeMesh.VertexHandle _D)
+	{
+		return _A.Equals(_B) || _A.Equals(_C) || _A.Equals(_D) ||
+			_B.Equals(_C) || _B.Equals(_D) ||
+			_C.Equals(_D);
 	}
 }

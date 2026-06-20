@@ -4,11 +4,16 @@ namespace RedSnail.RoadTool;
 
 public partial class RoadComponent
 {
+	/// <summary>
+	/// This will prevent the sidewalk from being rebuilt if any property is edited or if the road component get disable and re-enabled.
+	/// Really useful if you plan to edit the mesh with the mapping tool so you don't accidently erase/rebuild the sidewalk.
+	/// </summary>
 	[Property(Title = "🔒 Locked"), Feature("Sidewalk")] private bool IsSidewalkLocked { get; set; } = false;
 	[Property, FeatureEnabled("Sidewalk", Icon = "directions_walk", Tint = EditorTint.Blue)] private bool HasSidewalk { get; set { field = value; IsDirty = true; } } = true;
 	[Property(Title = "Material"), Feature("Sidewalk")] private Material SidewalkMaterial { get; set { field = value; IsDirty = true; } }
 	[Property(Title = "Width"), Feature("Sidewalk"), Range(10.0f, 500.0f)] private float SidewalkWidth { get; set { field = value; IsDirty = true; } } = 150.0f;
 	[Property(Title = "Height"), Feature("Sidewalk"), Range(0.1f, 100.0f)] private float SidewalkHeight { get; set { field = value; IsDirty = true; } } = 5.0f;
+	[Property(Title = "Inner Bevel"), Feature("Sidewalk"), Range(0.0f, 100.0f)] private float SidewalkBevel { get; set { field = value; IsDirty = true; } } = 0.0f;
 	[Property(Title = "Texture Repeat"), Feature("Sidewalk")] private float SidewalkTextureRepeat { get; set { field = value.Clamp(1.0f, 100000.0f); IsDirty = true; } } = 200.0f;
 
 
@@ -35,6 +40,12 @@ public partial class RoadComponent
 		float rightInnerEdge = roadEdgeOffset;
 		float rightOuterEdge = roadEdgeOffset + SidewalkWidth;
 
+		// Inner-edge bevel: push the inner-top vertices OUTWARD so the vertical curb face becomes a slope. Only the inner
+		// edge moves — the top and outer faces (and their UVs) are untouched. bevelV is the slope's length in UV space,
+		// so the curb-face texture follows the slope instead of stretching. bevel = 0 reproduces the old vertical curb.
+		float bevel = SidewalkBevel.Clamp(0.0f, SidewalkWidth);
+		float bevelV = new Vector2(bevel, SidewalkHeight).Length / SidewalkTextureRepeat;
+
 		float leftAvgUVDist = 0f;
 		float rightAvgUVDist = 0f;
 
@@ -47,12 +58,12 @@ public partial class RoadComponent
 
 			Vector3 lb = p + r * leftInnerEdge;
 			Vector3 lo = p + r * leftOuterEdge;
-			Vector3 lt = lb + u * SidewalkHeight;
+			Vector3 lt = p + r * (leftInnerEdge - bevel) + u * SidewalkHeight;  // inner-top pushed outward → sloped curb face
 			Vector3 lto = lo + u * SidewalkHeight;
 
 			Vector3 rb = p + r * rightInnerEdge;
 			Vector3 ro = p + r * rightOuterEdge;
-			Vector3 rt = rb + u * SidewalkHeight;
+			Vector3 rt = p + r * (rightInnerEdge + bevel) + u * SidewalkHeight;
 			Vector3 rto = ro + u * SidewalkHeight;
 
 			frameVertices[i] = polygonMesh.AddVertices(lb, lo, lt, lto, rb, ro, rt, rto);
@@ -112,7 +123,7 @@ public partial class RoadComponent
 				polygonMesh,
 				material,
 				frameVertices[i][0], frameVertices[i + 1][0], frameVertices[i + 1][2], frameVertices[i][2],
-				new Vector2(v2, leftAvgV0), new Vector2(v2, leftAvgV1), new Vector2(0, leftAvgV1), new Vector2(0, leftAvgV0));
+				new Vector2(bevelV, leftAvgV0), new Vector2(bevelV, leftAvgV1), new Vector2(0, leftAvgV1), new Vector2(0, leftAvgV0));
 
 			MeshUtility.AddTexturedQuad(
 				polygonMesh,
@@ -130,7 +141,7 @@ public partial class RoadComponent
 				polygonMesh,
 				material,
 				frameVertices[i][4], frameVertices[i][6], frameVertices[i + 1][6], frameVertices[i + 1][4],
-				new Vector2(v2, rightAvgV0), new Vector2(0, rightAvgV0), new Vector2(0, rightAvgV1), new Vector2(v2, rightAvgV1));
+				new Vector2(bevelV, rightAvgV0), new Vector2(0, rightAvgV0), new Vector2(0, rightAvgV1), new Vector2(bevelV, rightAvgV1));
 
 			MeshUtility.AddTexturedQuad(
 				polygonMesh,

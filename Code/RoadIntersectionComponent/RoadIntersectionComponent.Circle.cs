@@ -263,7 +263,6 @@ public partial class RoadIntersectionComponent
 
 		float innerR = Radius;
 		float outerR = Radius + SidewalkWidth;
-		float heightUV = SidewalkHeight / SidewalkTextureRepeat;
 
 		for (int i = 0; i < segments; i++)
 		{
@@ -291,8 +290,9 @@ public partial class RoadIntersectionComponent
 			var vI1 = MeshUtility.GetOrAddVertex(_Mesh, cache, i1);
 			var vO0 = MeshUtility.GetOrAddVertex(_Mesh, cache, o0);
 			var vO1 = MeshUtility.GetOrAddVertex(_Mesh, cache, o1);
-			var vTI0 = MeshUtility.GetOrAddVertex(_Mesh, cache, i0 + up * SidewalkHeight);
-			var vTI1 = MeshUtility.GetOrAddVertex(_Mesh, cache, i1 + up * SidewalkHeight);
+			// Inner-top pushed OUTWARD (radially) by the bevel so the curb face slopes; outer-top stays put.
+			var vTI0 = MeshUtility.GetOrAddVertex(_Mesh, cache, i0 + d0V * CurbBevel + up * SidewalkHeight);
+			var vTI1 = MeshUtility.GetOrAddVertex(_Mesh, cache, i1 + d1V * CurbBevel + up * SidewalkHeight);
 			var vTO0 = MeshUtility.GetOrAddVertex(_Mesh, cache, o0 + up * SidewalkHeight);
 			var vTO1 = MeshUtility.GetOrAddVertex(_Mesh, cache, o1 + up * SidewalkHeight);
 
@@ -300,9 +300,9 @@ public partial class RoadIntersectionComponent
 			MeshUtility.AddTexturedQuad(_Mesh, _Material, vTO0, vTO1, vTI1, vTI0,
 				new Vector2(1, v0), new Vector2(1, v1), new Vector2(0, v1), new Vector2(0, v0));
 
-			// Curb face
+			// Curb face (sloped when beveled — U follows the slope length)
 			MeshUtility.AddTexturedQuad(_Mesh, _Material, vTI0, vTI1, vI1, vI0,
-				new Vector2(0, v0), new Vector2(0, v1), new Vector2(heightUV, v1), new Vector2(heightUV, v0));
+				new Vector2(0, v0), new Vector2(0, v1), new Vector2(CurbBevelV, v1), new Vector2(CurbBevelV, v0));
 		}
 
 		// Sidewalk strips alongside each exit corridor, curb walls on both sides of the exit road
@@ -393,8 +393,9 @@ public partial class RoadIntersectionComponent
 		float uA = Vector3.DistanceBetween(_A, _D) / SidewalkTextureRepeat;
 		float uB = Vector3.DistanceBetween(_B, _C) / SidewalkTextureRepeat;
 
-		Vector3 aT = _A + up * h;
-		Vector3 bT = _B + up * h;
+		// Inner-top (A, B) pushed toward the outer edge by the bevel so the curb face slopes; outer-top (C, D) stays put.
+		Vector3 aT = _A + up * h + (_D - _A).Normal * CurbBevel;
+		Vector3 bT = _B + up * h + (_C - _B).Normal * CurbBevel;
 		Vector3 cT = _C + up * h;
 		Vector3 dT = _D + up * h;
 
@@ -411,9 +412,9 @@ public partial class RoadIntersectionComponent
 		MeshUtility.AddTexturedQuad(_Mesh, _Material, vAT, vBT, vCT, vDT,
 			new Vector2(0, _VA), new Vector2(0, _VB), new Vector2(uB, _VB), new Vector2(uA, _VA));
 
-		// Curb face along A-B edge — U is the wall height (0 at top, hHeight at ground), V follows the curve.
+		// Curb face along A-B edge — sloped when beveled; U follows the slope length, V follows the curve.
 		MeshUtility.AddTexturedQuad(_Mesh, _Material, vAT, vA, vB, vBT,
-			new Vector2(0, _VA), new Vector2(hHeight, _VA), new Vector2(hHeight, _VB), new Vector2(0, _VB));
+			new Vector2(0, _VA), new Vector2(CurbBevelV, _VA), new Vector2(CurbBevelV, _VB), new Vector2(0, _VB));
 
 		// Outer face along C-D edge.
 		MeshUtility.AddTexturedQuad(_Mesh, _Material, vCT, vC, vD, vDT,

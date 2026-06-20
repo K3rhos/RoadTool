@@ -1214,7 +1214,7 @@ public sealed class TrafficVehicle : Component
 			.IgnoreGameObjectHierarchy(GameObject)
 			.Run();
 
-		if (Game.IsPlaying && RoadManager.Current.ShowLayoutOverlays)
+		if (Game.IsPlaying && RoadManager.Current.ShowOverlays)
 			DebugOverlay.Trace(trace);
 
 		if (!trace.Hit)

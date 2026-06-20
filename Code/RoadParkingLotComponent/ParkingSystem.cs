@@ -87,12 +87,24 @@ public sealed class ParkingSystem : Component
 		if (IsProxy)
 			return;
 
-		foreach (var vehicle in m_SpawnedVehicles.ToArray())
+		var toDelete = new List<GameObject>();
+		toDelete.AddRange(m_SpawnedVehicles);
+
+		foreach (var vehicle in toDelete)
 		{
-			vehicle.Destroy();
+			m_SpawnedVehicles.Remove(vehicle);
+			
+			var entityFade = vehicle.GetComponent<EntityFade>();
+
+			if (entityFade.IsValid())
+			{
+				entityFade.FadeOutAndDestroy();
+			}
+			else
+			{
+				vehicle.Destroy();
+			}
 		}
-		
-		m_SpawnedVehicles.Clear();
 	}
 	
 	
@@ -145,7 +157,7 @@ public sealed class ParkingSystem : Component
 		bool canSafelyRespawn = !IsSpawnAreaBlocked();
 		
 		// Debug overlay
-		if (RoadManager.Current.ShowLayoutOverlays)
+		if (RoadManager.Current.ShowOverlays)
 		{
 			Color debugColor = canSafelyRespawn ? Color.Green : Color.Blue;
 			
@@ -156,7 +168,7 @@ public sealed class ParkingSystem : Component
 		{
 			// We engage an almost instant respawn when all players were previously far away from the parking spot,
 			// this allows for a fast respawn in this specific case
-			if (ArePlayersWithinParkingSpot())
+			if (ArePlayersWithinParkingSpot(RoadManager.Current.ParkedVehicleRespawnDistance))
 			{
 				m_Timer -= EXECUTION_INTERVAL;
 			}
@@ -182,7 +194,7 @@ public sealed class ParkingSystem : Component
 			
 			foreach (var vehicle in m_SpawnedVehicles)
 			{
-				if (ArePlayersWithinParkingSpot())
+				if (ArePlayersWithinParkingSpot(RoadManager.Current.ParkedVehicleDespawnDistance))
 					continue;
 			
 				if (vehicle.Tags.Has("last_vehicle"))
@@ -195,7 +207,16 @@ public sealed class ParkingSystem : Component
 			{
 				m_SpawnedVehicles.Remove(vehicle);
 				
-				vehicle.Destroy();
+				var entityFade = vehicle.GetComponent<EntityFade>();
+
+				if (entityFade.IsValid())
+				{
+					entityFade.FadeOutAndDestroy();
+				}
+				else
+				{
+					vehicle.Destroy();
+				}
 			}
 				
 			m_DespawnTimer = 0;
@@ -204,9 +225,9 @@ public sealed class ParkingSystem : Component
 	
 	
 	
-	private bool ArePlayersWithinParkingSpot()
+	private bool ArePlayersWithinParkingSpot(float _Distance)
 	{
-		return RoadManager.ArePlayersWithin(WorldPosition, RoadManager.Current.ParkedVehicleRespawnDistance);
+		return RoadManager.ArePlayersWithin(WorldPosition, _Distance);
 	}
 	
 	
@@ -219,12 +240,17 @@ public sealed class ParkingSystem : Component
 		GameObject vehicle = vehiclePrefab.Clone(WorldPosition, angles);
 		vehicle.NetworkSpawn(Connection.Host);
 		vehicle.Network.SetOrphanedMode(NetworkOrphaned.Host);
+		vehicle.Network.SetOwnerTransfer(OwnerTransfer.Request);
 		
 		var renderer = vehicle.GetComponent<ModelRenderer>();
 
 		// Give it a cool random tint
 		if (renderer.IsValid())
+		{
 			renderer.Tint = new Color(Game.Random.NextSingle(), Game.Random.NextSingle(), Game.Random.NextSingle(), renderer.Tint.a);
+			
+			Network.Refresh(renderer);
+		}
 		
 		m_SpawnedVehicles.Add(vehicle);
 		m_Timer = Random.Shared.Next(RespawnMinTime, RespawnMaxTime + 1);

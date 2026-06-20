@@ -13,14 +13,9 @@ public enum CrosswalkConfig
 public partial class RoadComponent
 {
 	private bool m_DoesCrosswalksNeedsRebuild = false;
-
-	[Property, FeatureEnabled("Crosswalks", Icon = "menu", Tint = EditorTint.Pink), Change] private bool HasCrosswalks { get; set; } = false;
-	[Property(Title = "Config"), Feature("Crosswalks")] public CrosswalkConfig CrosswalkConfig { get; set { field = value; m_DoesCrosswalksNeedsRebuild = true; } } = CrosswalkConfig.Both;
-	[Property(Title = "Decal Definition"), Feature("Crosswalks")] public DecalDefinition CrosswalkDefinition { get; set { field = value; m_DoesCrosswalksNeedsRebuild = true; } }
-	[Property(Title = "Decal Size"), Feature("Crosswalks"), Range(0.1f, 10.0f)] private Vector2 CrosswalkSize { get; set { field = value; m_DoesCrosswalksNeedsRebuild = true; } } = Vector2.One;
-
-
-
+	
+	
+	
 	private void OnHasCrosswalksChanged(bool _OldValue, bool _NewValue)
 	{
 		m_DoesCrosswalksNeedsRebuild = true;
