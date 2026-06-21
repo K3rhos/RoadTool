@@ -5,6 +5,7 @@ using Sandbox;
 public sealed class EntityFade : Component
 {
 	private float m_FadeTimer;
+	private bool m_IsFading;
 	private IEnumerable<ModelRenderer> m_Renderers = [];
 
 	[Property] private float Duration { get; set; } = 0.5f;
@@ -18,6 +19,12 @@ public sealed class EntityFade : Component
 
 	private async Task AsyncFadeIn()
 	{
+		if (m_IsFading)
+			return;
+		
+		m_IsFading = true;
+		m_FadeTimer = 0;
+		
 		while (m_FadeTimer < Duration)
 		{
 			m_FadeTimer += Time.Delta;
@@ -30,11 +37,17 @@ public sealed class EntityFade : Component
 			await Task.Frame();
 		}
 
-		m_FadeTimer = 0;
+		m_IsFading = false;
 	}
 
 	private async Task AsyncFadeOut()
 	{
+		if (m_IsFading)
+			return;
+		
+		m_IsFading = true;
+		m_FadeTimer = 0;
+		
 		while (m_FadeTimer < Duration)
 		{
 			m_FadeTimer += Time.Delta;
@@ -47,7 +60,7 @@ public sealed class EntityFade : Component
 			await Task.Frame();
 		}
 		
-		m_FadeTimer = 0;
+		m_IsFading = false;
 	}
 	
 	private async Task AsyncFadeOutAndDestroy()

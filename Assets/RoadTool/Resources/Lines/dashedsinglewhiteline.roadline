@@ -1,0 +1,7 @@
+{
+  "Material": "roadtool/materials/roadlanewhiteline.vmat",
+  "DashSpacing": 300,
+  "DashFillRatio": 0.5,
+  "__references": [],
+  "__version": 0
+}

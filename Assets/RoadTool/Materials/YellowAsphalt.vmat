@@ -6,8 +6,8 @@ Layer0
 
 	//---- Albedo ----
 	BaseColour "materials/dev/dev_measuregeneric01b_color.tga"
-	g_flBlendAmount "0.200"
-	g_vBlendColour "[0.392157 0.364706 0.298039 1.000000]"
+	g_flBlendAmount "0.350"
+	g_vBlendColour "[1.000000 0.764706 0.000000 1.000000]"
 
 	//---- Ambient Occlusion ----
 	AmbientOcclusion "materials/default/default_ao.tga"
@@ -25,7 +25,7 @@ Layer0
 	g_bFollowWorldSpace "1"
 	g_bUseObjectSpace "0"
 	g_vOffset "[0.000 0.000]"
-	g_vTile "[5.000 5.000]"
+	g_vTile "[10.000 10.000]"
 
 	//---- Metalness ----
 	Metalness "materials/default/default_metal.tga"
