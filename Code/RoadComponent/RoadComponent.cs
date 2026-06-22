@@ -118,6 +118,8 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 	{
 		Spline.SplineChanged += UpdateData;
 
+		EnsureLanes(); // migrate/seed the lane layout before anything that reads it (lines mesh, traffic graph) runs
+
 		EnsureRoadMeshExist();
 		EnsureSidewalkMeshExist();
 		EnsureBridgeMeshExist();
