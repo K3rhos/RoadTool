@@ -21,6 +21,9 @@ public partial class RoadComponent
 	/// <summary>Speed limit for traffic on this road, in km/h.</summary>
 	[Property, Feature("General"), Category("Traffic"), Range(5.0f, 130.0f)] public float SpeedLimit { get; set; } = 50.0f;
 
+	/// <summary>How far this road's dead-end U-turn loop is held back from the road end, in units (larger = the bulb sits further back up the road).</summary>
+	[Property, Feature("General"), Category("Traffic"), Range(-1000.0f, 1000.0f)] public float UTurnClearance { get; set; } = 100.0f;
+
 
 
 	/// <summary>

@@ -455,7 +455,7 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 		// The prefab is just the visual/body — the manager attaches the driver and points it at its lane.
 		var vehicle = clone.GetOrAddComponent<TrafficVehicle>();
 		vehicle.DefaultSpeed = DefaultSpeed * TrafficMath.KmhToUnits;
-		vehicle.HoverHeight = SpawnHeightOffset;
+		vehicle.HeightOffset = SpawnHeightOffset;
 		vehicle.Spacing = VehicleSpacing;
 		vehicle.StopMargin = StopMargin;
 		vehicle.LoosePatience = LoosePatience;

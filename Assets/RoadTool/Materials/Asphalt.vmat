@@ -2,10 +2,10 @@
 
 Layer0
 {
-	shader "shaders/advancedtriplanar.shader"
+	shader "roadtool/shaders/roadtool_triplanar.shader"
 
 	//---- Albedo ----
-	BaseColour "materials/dev/dev_measuregeneric01b_color.tga"
+	BaseColour "roadtool/textures/asphalt/asphalt_diffuse.jpg"
 	g_flBlendAmount "0.200"
 	g_vBlendColour "[0.392157 0.364706 0.298039 1.000000]"
 
@@ -32,9 +32,9 @@ Layer0
 
 	//---- Normal ----
 	g_flNormalStrength "1.000"
-	NormalMap "materials/default/default_normal.tga"
+	NormalMap "roadtool/textures/asphalt/asphalt_normal.jpg"
 
 	//---- Roughness ----
 	g_flRoughnessScaleFactor "1.000"
-	Roughness "materials/default/default_rough.tga"
+	Roughness "roadtool/textures/asphalt/asphalt_roughness.jpg"
 }

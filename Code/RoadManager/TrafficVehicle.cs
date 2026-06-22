@@ -21,36 +21,36 @@ public enum AIState
 public sealed class TrafficVehicle : Component
 {
 	public RoadTrafficGraph Graph { get; set; }
-	public float HoverHeight { get; set; } = 40.0f;
-	public float TurnRate { get; set; } = 6.0f;
-
-	/// <summary>Speed (s&amp;box units/s) used on connectors and dead-end U-turns — anything that isn't a road or intersection lane.</summary>
-	public float DefaultSpeed { get; set; } = 200.0f;
-
-	/// <summary>Desired following gap; the vehicle brakes for anything ahead within this distance.</summary>
-	public float Spacing { get; set { field = value.Clamp(10.0f, 1000.0f); } } = 180.0f;
-
+	
 	/// <summary>Shared list of all live vehicles (owned by the manager) used for collision awareness.</summary>
 	public List<TrafficVehicle> Neighbors { get; set; }
+	
+	[Property] public float HeightOffset { get; set; } = 0.0f;
+	
+	/// <summary>Only used for the 'DriveOnRails' approach</summary>
+	[Property] public float TurnRate { get; set; } = 6.0f;
+
+	/// <summary>Speed (s&amp;box units/s) used on connectors and dead-end U-turns — anything that isn't a road or intersection lane.</summary>
+	[Property] public float DefaultSpeed { get; set; } = 200.0f;
+
+	/// <summary>Desired following gap; the vehicle brakes for anything ahead within this distance.</summary>
+	[Property] public float Spacing { get; set { field = value.Clamp(10.0f, 1000.0f); } } = 180.0f;
 
 	/// <summary>Entity tags (players, NPCs, …) the vehicle brakes for when sensed directly ahead.</summary>
-	public TagSet AwareTags { get; set; }
+	[Property] public TagSet AwareTags { get; set; }
 
 	/// <summary>Radius of the forward sweep used to sense tagged entities.</summary>
-	public float DetectRadius { get; set; } = 50.0f;
+	[Property] public float DetectRadius { get; set; } = 50.0f;
 
 	/// <summary>How far before an intersection's stop line the vehicle aims to halt for a red light / yield, so
 	/// leftover braking momentum doesn't carry it over the line (and the crosswalk) into the junction.</summary>
-	public float StopMargin { get; set; } = 150.0f;
+	[Property] public float StopMargin { get; set; } = 150.0f;
 
 	/// <summary>Seconds the driver will sit blocked by a tagged entity (player/prop) before losing patience and entering road rage.</summary>
-	public float LoosePatience { get; set; } = 20.0f;
+	[Property] public float LoosePatience { get; set; } = 20.0f;
 
 	/// <summary>Seconds road rage lasts once triggered — it stays aggressive this long even after the obstacle clears.</summary>
-	public float RoadRageDuration { get; set; } = 20.0f;
-
-	/// <summary>Current AI behaviour (Normal / RoadRage).</summary>
-	public AIState State => m_State;
+	[Property] public float RoadRageDuration { get; set; } = 20.0f;
 
 	/// <summary>
 	/// True while this brain is actually driving the car as an NPC: the component is active and no player has taken
@@ -128,7 +128,7 @@ public sealed class TrafficVehicle : Component
 	private bool m_RageGoAround;      // steering wide around an obstacle (latched while blocked + a short hold after)
 	private float m_GoAroundHold;     // remaining hold time for the go-around after the obstacle clears
 	private float m_RelocateCooldown; // throttles the nearest-road search while the car is displaced off its route
-	private System.Random m_Rng;
+	private Random m_Rng;
 
 
 
@@ -136,7 +136,7 @@ public sealed class TrafficVehicle : Component
 	public void Initialize(RoadTrafficGraph _Graph, TrafficLane _Lane, int _StartIndex, int _Seed)
 	{
 		Graph = _Graph;
-		m_Rng = new System.Random(_Seed);
+		m_Rng = new Random(_Seed);
 		m_Id = _Seed;
 
 		SetPath(new List<Vector3>(_Lane.Waypoints), _Lane, 0);
@@ -149,7 +149,7 @@ public sealed class TrafficVehicle : Component
 		if (m_Heading.IsNearZeroLength)
 			m_Heading = m_Lane.StartDir;
 
-		WorldPosition = m_Pos + Vector3.Up * HoverHeight;
+		WorldPosition = m_Pos + Vector3.Up * HeightOffset;
 		WorldRotation = Rotation.LookAt(m_Heading, Vector3.Up);
 
 		ComputeForwardExtents();
@@ -293,7 +293,7 @@ public sealed class TrafficVehicle : Component
 		if (!desired.IsNearZeroLength)
 			m_Heading = desired.Normal;
 
-		WorldPosition = m_Pos + Vector3.Up * HoverHeight;
+		WorldPosition = m_Pos + Vector3.Up * HeightOffset;
 
 		if (!m_Heading.IsNearZeroLength)
 			WorldRotation = Rotation.Slerp(WorldRotation, Rotation.LookAt(m_Heading, Vector3.Up), Time.Delta * TurnRate);

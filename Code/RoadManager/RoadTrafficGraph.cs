@@ -704,7 +704,8 @@ public sealed class RoadTrafficGraph
 		// to F = √(3R² − R·spacing − spacing²/4).
 		float forward = MathF.Sqrt(MathF.Max(0.0f, 3.0f * radius * radius - radius * spacing - spacing * spacing * 0.25f));
 
-		float clearance = _Approach.RoadHalfWidth * 0.3f;
+		// Held back from the dead end by a per-road amount (defaults to 100) rather than a fixed fraction of road width.
+		float clearance = (_Approach.Owner is RoadComponent ownerRoad && ownerRoad.IsValid()) ? ownerRoad.UTurnClearance : 100.0f;
 		float margin = forward + radius + clearance;
 
 		// If the lanes are too short to contain the bulb (or run straight into each other), fall back to a plain hairpin.
