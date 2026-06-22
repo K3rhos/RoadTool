@@ -237,12 +237,21 @@ public sealed class RoadTrafficGraph
 					if (i == j || outgoing[j].Count == 0)
 						continue;
 
-					for (int k = 0; k < incoming[i].Count; k++)
-					{
-						TrafficLane src = incoming[i][k];
-						TrafficLane dst = outgoing[j][Math.Min(k, outgoing[j].Count - 1)];
+					// Match lanes by lateral position in a frame shared by BOTH exits so a straight-through keeps its
+					// lane. Each exit sorts its lanes by its own right vector, which flips between opposing exits, so
+					// pairing by index swapped left/right and crossed the through-lanes. Re-order both by one common
+					// axis (perpendicular to the line between the two exits) before pairing.
+					Vector3 thru = (exits[j].Transform.Position - exits[i].Transform.Position).WithZ(0.0f).Normal;
+					Vector3 lateral = Vector3.Cross(thru, Vector3.Up);
 
-						TrafficLane cross = BuildCrossLane(src, dst, center, intersection, _Settings.WaypointSpacing);
+					var src = new List<TrafficLane>(incoming[i]);
+					var dst = new List<TrafficLane>(outgoing[j]);
+					src.Sort((a, b) => Vector3.Dot(a.EndPos, lateral).CompareTo(Vector3.Dot(b.EndPos, lateral)));
+					dst.Sort((a, b) => Vector3.Dot(a.StartPos, lateral).CompareTo(Vector3.Dot(b.StartPos, lateral)));
+
+					for (int k = 0; k < src.Count; k++)
+					{
+						TrafficLane cross = BuildCrossLane(src[k], dst[Math.Min(k, dst.Count - 1)], center, intersection, _Settings.WaypointSpacing);
 						cross.SpeedLimit = intersectionSpeed;
 						Lanes.Add(cross);
 						crossLanes.Add(cross);
