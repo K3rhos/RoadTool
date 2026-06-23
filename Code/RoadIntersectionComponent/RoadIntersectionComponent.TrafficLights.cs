@@ -177,17 +177,29 @@ public partial class RoadIntersectionComponent
 		Vector3 up = WorldRotation.Up;
 		float sidewalkOffset = SidewalkWidth;
 
-		foreach (RectangleExit exit in Enum.GetValues<RectangleExit>())
+		EnsureRectangleExits();
+
+		var roads = Scene.GetAll<RoadComponent>().ToList();
+
+		foreach (var exit in Exits)
 		{
-			if (exit == RectangleExit.None || !RectangleExits.HasFlag(exit))
+			if (exit is null)
 				continue;
 
-			Transform exitTransform = GetRectangleExitLocalTransform(exit);
+			// Only light an exit that traffic ARRIVES from: a road leaving the intersection here (or no connected road)
+			// gets no light. Matched against the snap point (sidewalk edge), where a connecting road's endpoint sits.
+			Transform worldExit = GetRectangleExitTransform(exit.Side, true, exit.Offset);
+			float connectRadius = exit.Width * 0.5f + SidewalkWidth;
+
+			if (!roads.Any(road => road.IsValid() && !road.ExcludeTraffic && road.HasIncomingTrafficAt(worldExit.Position, connectRadius)))
+				continue;
+
+			Transform exitTransform = GetRectangleExitLocalTransform(exit.Side, false, exit.Offset);
 
 			Vector3 exitRight = exitTransform.Rotation.Right;
 			Vector3 exitForward = exitTransform.Rotation.Forward;
 
-			float exitRoadWidth = GetExitRoadWidth(exit);
+			float exitRoadWidth = exit.Width;
 			float halfRoadWidth = exitRoadWidth * 0.5f;
 
 			float placementDistance = TrafficLightPlacementSystem == TrafficLightSystem.US ? -sidewalkOffset - exitRoadWidth : sidewalkOffset;
@@ -203,7 +215,7 @@ public partial class RoadIntersectionComponent
 			Rotation rotation = exitTransform.Rotation * Rotation.FromYaw(TrafficLightRotationOffset);
 
 			// North/South exits share the WorldForward axis → group 0; East/West → group 1.
-			int group = (exit == RectangleExit.North || exit == RectangleExit.South) ? 0 : 1;
+			int group = (exit.Side == RectangleExit.North || exit.Side == RectangleExit.South) ? 0 : 1;
 
 			GameObject lightObj = CreateTrafficLight(containerObject, position, rotation);
 

@@ -96472,7 +96472,7 @@
       ],
       "Children": [
         {
-          "__guid": "30b2a512-fb20-465b-bfb1-1e7c2b0c4b3b",
+          "__guid": "96642c40-2852-46fd-9e0b-93a0d498e0c6",
           "__version": 2,
           "Flags": 0,
           "Name": "Intersection_Road",
@@ -96489,7 +96489,7 @@
           "Components": [
             {
               "__type": "Sandbox.MeshComponent",
-              "__guid": "cec77cba-71a9-45fd-a2b9-ade776d14050",
+              "__guid": "25266308-1bd2-4cbc-b246-62ecbe39f63a",
               "__enabled": true,
               "Flags": 0,
               "ColliderFlags": 0,
@@ -96926,7 +96926,7 @@
           "Children": []
         },
         {
-          "__guid": "e595aec1-ec5e-4e15-84a7-916b19335e25",
+          "__guid": "a5f7fed9-6a5b-44f7-b070-338d70765589",
           "__version": 2,
           "Flags": 0,
           "Name": "Intersection_Sidewalk",
@@ -96943,7 +96943,7 @@
           "Components": [
             {
               "__type": "Sandbox.MeshComponent",
-              "__guid": "949b814d-ae3f-4bb5-a47d-20ea43f8a3ca",
+              "__guid": "bb658ed8-94da-4019-b326-4684b4ebf918",
               "__enabled": true,
               "Flags": 0,
               "ColliderFlags": 0,
@@ -98432,7 +98432,7 @@
       ],
       "Children": [
         {
-          "__guid": "2481a746-c2de-4da9-84b4-e83dcfd82134",
+          "__guid": "b995ec5f-de95-45a4-a26d-7d237202b10d",
           "__version": 2,
           "Flags": 0,
           "Name": "Intersection_Road",
@@ -98449,7 +98449,7 @@
           "Components": [
             {
               "__type": "Sandbox.MeshComponent",
-              "__guid": "f9aceaf5-8438-4f88-97b7-f5b5b242162a",
+              "__guid": "e79ee1de-44a1-46d1-9291-16e659591153",
               "__enabled": true,
               "Flags": 0,
               "ColliderFlags": 0,
@@ -98860,7 +98860,7 @@
           "Children": []
         },
         {
-          "__guid": "9e1d07fe-ebcb-45e2-8ee4-120ac5311386",
+          "__guid": "6b89d5b1-59e3-4cd6-8585-aa8d9fe8630e",
           "__version": 2,
           "Flags": 0,
           "Name": "Intersection_Sidewalk",
@@ -98877,7 +98877,7 @@
           "Components": [
             {
               "__type": "Sandbox.MeshComponent",
-              "__guid": "7f089da4-0562-4412-86e3-1a1d93813e79",
+              "__guid": "c4d6cbce-6920-4d58-b703-5975f7ab0fe5",
               "__enabled": true,
               "Flags": 0,
               "ColliderFlags": 0,
@@ -106756,7 +106756,7 @@
       ],
       "Children": [
         {
-          "__guid": "0513e5e6-d2fb-4181-ada6-d88554c9d38f",
+          "__guid": "a1ae4498-5002-4c4a-a2bf-22ea3f2edfb7",
           "__version": 2,
           "Flags": 0,
           "Name": "Intersection_Road",
@@ -106773,7 +106773,7 @@
           "Components": [
             {
               "__type": "Sandbox.MeshComponent",
-              "__guid": "0cf48ffa-271f-4568-b297-916743c9974e",
+              "__guid": "9eb933a8-e756-42e8-a869-66274637d1ff",
               "__enabled": true,
               "Flags": 0,
               "ColliderFlags": 0,
@@ -107542,7 +107542,7 @@
           "Children": []
         },
         {
-          "__guid": "9e5bc61f-1e34-4975-b2ff-4bc38c7e2e71",
+          "__guid": "4bc6c14a-7027-4a72-8469-ef79a737b89a",
           "__version": 2,
           "Flags": 0,
           "Name": "Intersection_Sidewalk",
@@ -107559,7 +107559,7 @@
           "Components": [
             {
               "__type": "Sandbox.MeshComponent",
-              "__guid": "c73a22a1-c012-45ed-b5e8-ab02fc8de8e8",
+              "__guid": "4554eb92-5477-4132-baa8-06588dadcb66",
               "__enabled": true,
               "Flags": 0,
               "ColliderFlags": 0,

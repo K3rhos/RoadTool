@@ -139,6 +139,44 @@ public partial class RoadComponent
 
 
 	/// <summary>
+	/// Whether this road has at least one lane travelling INTO the given world point (an intersection exit). Used to
+	/// decide if that exit needs a traffic light — a road that only leaves the intersection there doesn't (you don't
+	/// stop cars driving away). Returns false if neither spline endpoint is within <paramref name="_Threshold"/>.
+	/// </summary>
+	public bool HasIncomingTrafficAt(Vector3 _WorldPos, float _Threshold)
+	{
+		EnsureLanes();
+
+		float length = Spline.Length;
+
+		if (length <= 1.0f)
+			return false;
+
+		Vector3 startPos = WorldTransform.PointToWorld(Spline.SampleAtDistance(0.0f).Position);
+		Vector3 endPos = WorldTransform.PointToWorld(Spline.SampleAtDistance(length).Position);
+
+		float thresholdSq = _Threshold * _Threshold;
+		bool atEnd;
+
+		if (endPos.DistanceSquared(_WorldPos) <= thresholdSq)
+			atEnd = true;
+		else if (startPos.DistanceSquared(_WorldPos) <= thresholdSq)
+			atEnd = false;
+		else
+			return false; // this road doesn't connect at that point
+
+		// A "Forward" lane runs spline start→end: it arrives at the END endpoint and leaves the START. So a lane is
+		// incoming exactly when its forward-ness matches which end connects here.
+		foreach (var lane in Lanes)
+			if (((lane == LaneDirection.Forward) ^ InvertDirection) == atEnd)
+				return true;
+
+		return false;
+	}
+
+
+
+	/// <summary>
 	/// Samples the road centerline in WORLD space at roughly even spacing.
 	/// Fills <paramref name="_Positions"/> with surface points and <paramref name="_Rights"/> with the matching
 	/// right vector at each point (so the traffic graph can offset lanes to one side). Both lists are cleared first.
