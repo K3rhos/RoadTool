@@ -110,18 +110,27 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 
 		if (Shape == IntersectionShape.Rectangle)
 		{
-			foreach (RectangleExit val in System.Enum.GetValues<RectangleExit>())
+			EnsureRectangleExits();
+
+			foreach (var exit in Exits)
 			{
-				if (val == RectangleExit.None || !RectangleExits.HasFlag(val))
+				if (exit is null)
 					continue;
 
-				Transform transform = GetRectangleExitLocalTransform(val);
-				Gizmo.Draw.Color = Color.Cyan;
-				Gizmo.Draw.Arrow(transform.Position, transform.Position + transform.Forward * 100.0f);
+				Transform inner = GetRectangleExitLocalTransform(exit.Side, false, exit.Offset);
+				Transform outer = GetRectangleExitLocalTransform(exit.Side, true, exit.Offset);
 
-				transform = GetRectangleExitLocalTransform(val, true);
+				float half = exit.Width * 0.5f;
+
+				// Road edge: the opening's span across the side + its outward direction.
+				Gizmo.Draw.Color = Color.Cyan;
+				Gizmo.Draw.Line(inner.Position - inner.Rotation.Right * half, inner.Position + inner.Rotation.Right * half);
+				Gizmo.Draw.Arrow(inner.Position, inner.Position + inner.Rotation.Forward * 100.0f);
+
+				// Sidewalk edge (where roads snap): same span + direction.
 				Gizmo.Draw.Color = Color.Green;
-				Gizmo.Draw.Arrow(transform.Position, transform.Position + transform.Forward * 100.0f);
+				Gizmo.Draw.Line(outer.Position - outer.Rotation.Right * half, outer.Position + outer.Rotation.Right * half);
+				Gizmo.Draw.Arrow(outer.Position, outer.Position + outer.Rotation.Forward * 100.0f);
 			}
 		}
 	}

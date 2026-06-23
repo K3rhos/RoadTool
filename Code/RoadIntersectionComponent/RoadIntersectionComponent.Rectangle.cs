@@ -827,7 +827,7 @@ public partial class RoadIntersectionComponent
 
 
 
-	private Transform GetRectangleExitLocalTransform(RectangleExit _Side, bool _IncludeSidewalk = false)
+	private Transform GetRectangleExitLocalTransform(RectangleExit _Side, bool _IncludeSidewalk = false, float _Offset = 0.0f)
 	{
 		Vector3 pos = Vector3.Zero;
 		Rotation rot = Rotation.Identity;
@@ -851,6 +851,7 @@ public partial class RoadIntersectionComponent
 				break;
 		}
 
+		pos += rot.Right * _Offset; // lateral shift along the side to this opening's position
 		return new Transform { Position = pos, Rotation = rot };
 	}
 

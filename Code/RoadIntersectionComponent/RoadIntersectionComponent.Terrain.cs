@@ -92,7 +92,9 @@ public partial class RoadIntersectionComponent
 			bestDistance[i] = float.MaxValue;
 		}
 
-		// 2. Grid Traversal 
+		BuildRectangleExitCorridors();
+
+		// 2. Grid Traversal
 		for (int ix = 0; ix < resolution; ix++)
 		{
 			for (int iy = 0; iy < resolution; iy++)
@@ -213,7 +215,9 @@ public partial class RoadIntersectionComponent
 		}
 
 		float boundSize = (Shape == IntersectionShape.Rectangle ? Math.Max(Width, Length) * 0.5f : Radius) + TerrainEdgeRadius; // This line is unchanged 
-		BBox worldBounds = new BBox(WorldPosition - new Vector3(boundSize), WorldPosition + new Vector3(boundSize)); // This line is unchanged 
+		BBox worldBounds = new BBox(WorldPosition - new Vector3(boundSize), WorldPosition + new Vector3(boundSize)); // This line is unchanged
+
+		BuildRectangleExitCorridors();
 
 		var controlMap = storage.ControlMap;
 		bool hasModified = false;
@@ -293,6 +297,32 @@ public partial class RoadIntersectionComponent
 		}
 	}
 
+	// Per-opening exit corridors in local space, rebuilt once per flatten so the per-pixel distance test stays cheap.
+	// Each entry is an opening's road-edge centre, its outward direction, its lateral direction, and half its width.
+	private (Vector3 Center, Vector3 Outward, Vector3 Lateral, float Half)[] m_RectangleExitCorridors = Array.Empty<(Vector3, Vector3, Vector3, float)>();
+
+	private void BuildRectangleExitCorridors()
+	{
+		if (Shape != IntersectionShape.Rectangle)
+		{
+			m_RectangleExitCorridors = Array.Empty<(Vector3, Vector3, Vector3, float)>();
+			return;
+		}
+
+		EnsureRectangleExits();
+
+		m_RectangleExitCorridors = Exits
+			.Where(exit => exit != null)
+			.Select(exit =>
+			{
+				Transform t = GetRectangleExitLocalTransform(exit.Side, false, exit.Offset);
+				return (t.Position, t.Rotation.Forward, t.Rotation.Right, exit.Width * 0.5f);
+			})
+			.ToArray();
+	}
+
+
+
 	private float GetDistanceToIntersectionShape(Vector3 localPixelPos)
 	{
 		if (Shape == IntersectionShape.Rectangle)
@@ -303,14 +333,17 @@ public partial class RoadIntersectionComponent
 			float dy = MathF.Max(MathF.Abs(localPixelPos.y) - hw, 0);
 			float dist = MathF.Sqrt(dx * dx + dy * dy);
 
-			// Treat active exit corridors as inside — prevents terrain poking through road openings.
-			// In S&box local space Forward = +x, Right = -y, so East corridor is at y < -hw and West at y > +hw.
+			// Treat each open exit's corridor as inside, so terrain doesn't poke up through a road opening. A corridor is
+			// the band beyond an opening's road edge (outward) and within that opening's width (lateral) — one per opening.
 			if (dist > 0)
 			{
-				if (RectangleExits.HasFlag(RectangleExit.North) && localPixelPos.x > hl && MathF.Abs(localPixelPos.y) <= hw) return 0;
-				if (RectangleExits.HasFlag(RectangleExit.South) && localPixelPos.x < -hl && MathF.Abs(localPixelPos.y) <= hw) return 0;
-				if (RectangleExits.HasFlag(RectangleExit.East) && localPixelPos.y < -hw && MathF.Abs(localPixelPos.x) <= hl) return 0;
-				if (RectangleExits.HasFlag(RectangleExit.West) && localPixelPos.y > hw && MathF.Abs(localPixelPos.x) <= hl) return 0;
+				foreach (var corridor in m_RectangleExitCorridors)
+				{
+					Vector3 toPixel = localPixelPos - corridor.Center;
+
+					if (Vector3.Dot(toPixel, corridor.Outward) >= 0.0f && MathF.Abs(Vector3.Dot(toPixel, corridor.Lateral)) <= corridor.Half)
+						return 0;
+				}
 			}
 
 			return dist;
