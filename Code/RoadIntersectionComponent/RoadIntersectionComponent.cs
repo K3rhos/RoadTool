@@ -49,6 +49,9 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 
 	protected override void OnEnabled()
 	{
+		if (Shape == IntersectionShape.Rectangle)
+			EnsureRectangleExits();
+
 		BuildAllMeshes();
 		CreateTrafficLights();
 	}
@@ -201,15 +204,16 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 
 		if (Shape == IntersectionShape.Rectangle)
 		{
-			foreach (RectangleExit side in System.Enum.GetValues<RectangleExit>())
+			EnsureRectangleExits();
+
+			foreach (var exit in Exits)
 			{
-				if (side == RectangleExit.None || !RectangleExits.HasFlag(side))
+				if (exit is null)
 					continue;
 
-				Transform exitTransform = GetRectangleExitTransform(side, true);
-				float roadWidth = side is RectangleExit.North or RectangleExit.South ? Width : Length;
+				Transform exitTransform = GetRectangleExitTransform(exit.Side, true, exit.Offset);
 
-				SnapRoadsToExit(roads, exitTransform, roadWidth, snapDistance);
+				SnapRoadsToExit(roads, exitTransform, exit.Width, snapDistance);
 			}
 		}
 		else

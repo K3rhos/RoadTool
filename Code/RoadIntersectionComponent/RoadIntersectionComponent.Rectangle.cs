@@ -4,7 +4,6 @@ using Sandbox;
 
 namespace RedSnail.RoadTool;
 
-[Flags]
 public enum RectangleExit
 {
 	None = 0,
@@ -14,6 +13,18 @@ public enum RectangleExit
 	West = 1 << 3   // -Right
 }
 
+/// <summary>
+/// One opening of a rectangle intersection: which side it sits on, its lateral position along that side (world units,
+/// 0 = centred), and the width of the road that connects there. A side may carry any number of these.
+/// </summary>
+public class RectangleExitDef
+{
+	[Property, Hide] public RoadIntersectionComponent Reference { get; set; }
+	[Property(Title = "Side")] public RectangleExit Side { get; set { field = value; Reference?.m_IsDirty = true; } } = RectangleExit.North;
+	[Property(Title = "Offset")] public float Offset { get; set { field = value; Reference?.m_IsDirty = true; } } = 0.0f;
+	[Property(Title = "Width")] public float Width { get; set { field = value; Reference?.m_IsDirty = true; } } = 500.0f;
+}
+
 public partial class RoadIntersectionComponent
 {
 	private static readonly float QuarterTurnRad = MathF.PI * 0.5f;
@@ -21,18 +32,62 @@ public partial class RoadIntersectionComponent
 	[Property, Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Rectangle)] private float Width { get; set { field = value; m_IsDirty = true; } } = 500.0f;
 	[Property, Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Rectangle)] private float Length { get; set { field = value; m_IsDirty = true; } } = 500.0f;
 	[Property, Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Rectangle), Range(0, 16), Step(2)] private int CornerSegments { get; set { field = value; m_IsDirty = true; } } = 8;
-	[Property(Title = "Exits"), Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Rectangle)] private RectangleExit RectangleExits { get; set { field = value; m_IsDirty = true; } } = (RectangleExit)15;
+	[Property, Hide] private RectangleExit RectangleExits { get; set; } = (RectangleExit)15; // legacy flags, now derived from Exits — kept so the mesh/lights/terrain/gizmos can still ask "any opening on this side?"
+	[Property(Title = "Exits"), Feature("General"), ShowIf(nameof(Shape), IntersectionShape.Rectangle), Change] private RectangleExitDef[] Exits { get; set; } = [];
+
+	private void OnExitsChanged(RectangleExitDef[] _OldValue, RectangleExitDef[] _NewValue)
+	{
+		if (_NewValue.Length > 0 && _NewValue[^1] is null)
+			_NewValue[^1] = new RectangleExitDef { Reference = this };
+
+		SyncRectangleExitFlags();
+		m_IsDirty = true;
+	}
+
+	/// <summary>
+	/// Seeds <see cref="Exits"/> the first time it's needed: a rectangle saved under the old flags model migrates to one
+	/// centred, full-width opening per set side, so a fresh intersection comes up as a 4-way (the old default). Authored
+	/// openings are never overwritten. Also re-points each opening's back-reference and refreshes the legacy side flags.
+	/// </summary>
+	public void EnsureRectangleExits()
+	{
+		if (Exits is null || Exits.Length == 0)
+		{
+			var seeded = new List<RectangleExitDef>();
+
+			foreach (RectangleExit side in new[] { RectangleExit.North, RectangleExit.East, RectangleExit.South, RectangleExit.West })
+				if (RectangleExits.HasFlag(side))
+					seeded.Add(new RectangleExitDef { Reference = this, Side = side, Offset = 0.0f, Width = GetExitRoadWidth(side) });
+
+			Exits = seeded.ToArray();
+		}
+
+		foreach (var exit in Exits)
+			if (exit is not null)
+				exit.Reference = this;
+
+		SyncRectangleExitFlags();
+	}
+
+	/// <summary>Mirrors which sides currently carry at least one opening into the legacy <see cref="RectangleExits"/> flags.</summary>
+	private void SyncRectangleExitFlags()
+	{
+		RectangleExit flags = RectangleExit.None;
+
+		if (Exits is not null)
+			foreach (var exit in Exits)
+				if (exit is not null)
+					flags |= exit.Side;
+
+		RectangleExits = flags;
+	}
+	
 	[Property(Title = "Inner Corners UV Correction"), Feature("General"), Category("Sidewalk"), Range(0, 1), Step(0.01f), Order(3)] private float InnerCornersCorrection { get; set { field = value; m_IsDirty = true; } } = 0.0f;
 
 
 	private void BuildRectangleRoad(PolygonMesh _Mesh, Material _Material)
 	{
 		var cache = new Dictionary<Vector3, HalfEdgeMesh.VertexHandle>();
-
-		bool n = RectangleExits.HasFlag(RectangleExit.North);
-		bool s = RectangleExits.HasFlag(RectangleExit.South);
-		bool e = RectangleExits.HasFlag(RectangleExit.East);
-		bool w = RectangleExits.HasFlag(RectangleExit.West);
 
 		Vector3 right = Vector3.Right;
 		Vector3 forward = Vector3.Forward;
@@ -57,17 +112,165 @@ public partial class RoadIntersectionComponent
 			new Vector2(pNW.x, pNW.y) / RoadTextureRepeat,
 			new Vector2(pSW.x, pSW.y) / RoadTextureRepeat);
 
-		if (n) AddRoadExtension(_Mesh, _Material, cache, pNW, pNE, forward);
-		if (s) AddRoadExtension(_Mesh, _Material, cache, pSE, pSW, -forward);
-		if (e) AddRoadExtension(_Mesh, _Material, cache, pNE, pSE, right);
-		if (w) AddRoadExtension(_Mesh, _Material, cache, pSW, pNW, -right);
+		AddSideRoadExtensions(_Mesh, _Material, cache, RectangleExit.North, forward * hl, right, forward, hw);
+		AddSideRoadExtensions(_Mesh, _Material, cache, RectangleExit.South, -forward * hl, -right, -forward, hw);
+		AddSideRoadExtensions(_Mesh, _Material, cache, RectangleExit.East, right * hw, -forward, right, hl);
+		AddSideRoadExtensions(_Mesh, _Material, cache, RectangleExit.West, -right * hw, forward, -right, hl);
+
+		var reaches = GetCornerReaches(hw, hl);
 
 		if (CornerSegments > 0)
 		{
-			if (n && e) AddRoadCornerFiller(_Mesh, _Material, cache, pNE, right, forward);
-			if (n && w) AddRoadCornerFiller(_Mesh, _Material, cache, pNW, -right, forward);
-			if (s && e) AddRoadCornerFiller(_Mesh, _Material, cache, pSE, right, -forward);
-			if (s && w) AddRoadCornerFiller(_Mesh, _Material, cache, pSW, -right, -forward);
+			if (reaches.NorthHigh && reaches.EastLow) AddRoadCornerFiller(_Mesh, _Material, cache, pNE, right, forward);
+			if (reaches.NorthLow && reaches.WestHigh) AddRoadCornerFiller(_Mesh, _Material, cache, pNW, -right, forward);
+			if (reaches.EastHigh && reaches.SouthLow) AddRoadCornerFiller(_Mesh, _Material, cache, pSE, right, -forward);
+			if (reaches.WestLow && reaches.SouthHigh) AddRoadCornerFiller(_Mesh, _Material, cache, pSW, -right, -forward);
+		}
+	}
+
+
+
+	/// <summary>
+	/// This side's openings as [Lo, Hi] ranges in the side's lateral coordinate ([-span, span], where the lateral axis
+	/// matches the exit transform's right vector), clamped to the side and merged where they overlap. Sorted ascending.
+	/// </summary>
+	private List<(float Lo, float Hi)> CollectSideOpenings(RectangleExit _Side, float _Span)
+	{
+		var ranges = new List<(float Lo, float Hi)>();
+
+		if (Exits is not null)
+			foreach (var exit in Exits)
+			{
+				if (exit is null || exit.Side != _Side)
+					continue;
+
+				float lo = (exit.Offset - exit.Width * 0.5f).Clamp(-_Span, _Span);
+				float hi = (exit.Offset + exit.Width * 0.5f).Clamp(-_Span, _Span);
+
+				if (hi - lo > 0.1f)
+					ranges.Add((lo, hi));
+			}
+
+		ranges.Sort((a, b) => a.Lo.CompareTo(b.Lo));
+
+		var merged = new List<(float Lo, float Hi)>();
+
+		foreach (var r in ranges)
+			if (merged.Count > 0 && r.Lo <= merged[^1].Hi + 0.1f)
+				merged[^1] = (merged[^1].Lo, MathF.Max(merged[^1].Hi, r.Hi));
+			else
+				merged.Add(r);
+
+		return merged;
+	}
+
+	/// <summary>Whether any opening on this side reaches the corner end of the side (its +lateral end if
+	/// <paramref name="_HighEnd"/>, else its -lateral end) — i.e. the road, not the sidewalk, meets that corner.</summary>
+	private bool SideOpeningReachesEnd(RectangleExit _Side, float _Span, bool _HighEnd)
+	{
+		foreach (var (lo, hi) in CollectSideOpenings(_Side, _Span))
+			if (_HighEnd ? hi >= _Span - 0.1f : lo <= -_Span + 0.1f)
+				return true;
+
+		return false;
+	}
+
+	/// <summary>
+	/// Per-corner "does an opening reach here?" flags. Each side meets two corners — its +lateral (High) end and its
+	/// -lateral (low) end — and the names below say which corner each reaches:
+	/// NE = NorthHigh &amp; EastLow, NW = NorthLow &amp; WestHigh, SE = EastHigh &amp; SouthLow, SW = WestLow &amp; SouthHigh.
+	/// </summary>
+	private readonly struct CornerReaches
+	{
+		public bool NorthHigh { get; init; }
+		public bool NorthLow { get; init; }
+		public bool SouthHigh { get; init; }
+		public bool SouthLow { get; init; }
+		public bool EastHigh { get; init; }
+		public bool EastLow { get; init; }
+		public bool WestHigh { get; init; }
+		public bool WestLow { get; init; }
+	}
+
+	private CornerReaches GetCornerReaches(float _Hw, float _Hl) => new()
+	{
+		NorthHigh = SideOpeningReachesEnd(RectangleExit.North, _Hw, true),
+		NorthLow = SideOpeningReachesEnd(RectangleExit.North, _Hw, false),
+		SouthHigh = SideOpeningReachesEnd(RectangleExit.South, _Hw, true),
+		SouthLow = SideOpeningReachesEnd(RectangleExit.South, _Hw, false),
+		EastHigh = SideOpeningReachesEnd(RectangleExit.East, _Hl, true),
+		EastLow = SideOpeningReachesEnd(RectangleExit.East, _Hl, false),
+		WestHigh = SideOpeningReachesEnd(RectangleExit.West, _Hl, true),
+		WestLow = SideOpeningReachesEnd(RectangleExit.West, _Hl, false),
+	};
+
+	/// <summary>Extends the road surface outward under each opening on a side; the gaps between openings stay road-less so
+	/// the sidewalk strips fill them. center/lateral/outward are local-space; lateral matches the exit's right vector.</summary>
+	private void AddSideRoadExtensions(PolygonMesh _Mesh, Material _Material, Dictionary<Vector3, HalfEdgeMesh.VertexHandle> _Cache, RectangleExit _Side, Vector3 _Center, Vector3 _Lateral, Vector3 _Outward, float _Span)
+	{
+		foreach (var (lo, hi) in CollectSideOpenings(_Side, _Span))
+		{
+			AddRoadExtension(_Mesh, _Material, _Cache, _Center + _Lateral * lo, _Center + _Lateral * hi, _Outward);
+
+			// Tarmac under each inset curb return's rounded cutout (pairs with the sidewalk curb return, exactly as a
+			// geometric corner pairs a road filler with its rounded sidewalk). Empty when CornerSegments is 0.
+			if (lo > -_Span + 0.1f)
+				AddRoadCornerFiller(_Mesh, _Material, _Cache, _Center + _Lateral * lo, -_Lateral, _Outward);
+
+			if (hi < _Span - 0.1f)
+				AddRoadCornerFiller(_Mesh, _Material, _Cache, _Center + _Lateral * hi, _Lateral, _Outward);
+		}
+	}
+
+	/// <summary>
+	/// Builds the sidewalk along a side: a rounded curb return at every INSET opening edge (the rounded corner you see
+	/// where a road meets the kerb), then straight strips filling the runs between those returns and the geometric
+	/// corners. An edge that sits exactly on a geometric corner is left to the corner dispatch instead, so a full-width
+	/// opening adds nothing here and migrated 4-ways are untouched. A curb return reuses the corner primitive, oriented
+	/// between the side (lateral, toward the adjacent sidewalk) and the road (outward).
+	/// </summary>
+	private void AddSideSidewalkStrips(PolygonMesh _Mesh, Material _Material, Dictionary<Vector3, HalfEdgeMesh.VertexHandle> _Cache, RectangleExit _Side, Vector3 _Center, Vector3 _Lateral, Vector3 _Outward, float _Span)
+	{
+		var openings = CollectSideOpenings(_Side, _Span);
+		bool rounded = CornerSegments > 0;
+		float w = SidewalkWidth;
+
+		// Rounded curb return at each inset opening edge — its arc flares the kerb out from the side into the road.
+		// (With no corner segments there is no rounding to do; the strips below just butt the opening with a flat cap.)
+		if (rounded)
+		{
+			foreach (var (lo, hi) in openings)
+			{
+				if (lo > -_Span + 0.1f)
+					AddRoundedSidewalkCorner(_Mesh, _Material, _Cache, _Center + _Lateral * lo, -_Lateral, _Outward, false);
+
+				if (hi < _Span - 0.1f)
+					AddRoundedSidewalkCorner(_Mesh, _Material, _Cache, _Center + _Lateral * hi, _Lateral, _Outward, false);
+			}
+		}
+
+		// Straight strips fill the runs between features. When rounded, pull an opening-facing end back by w to make
+		// room for its curb return; otherwise leave it flush and flat-cap it. Corner-facing ends stay flush for the
+		// corner cap to close.
+		float cursor = -_Span;
+
+		for (int i = 0; i <= openings.Count; i++)
+		{
+			float gapLo = cursor;
+			float gapHi = i < openings.Count ? openings[i].Lo : _Span;
+
+			bool lowIsEdge = gapLo > -_Span + 0.1f;
+			bool highIsEdge = gapHi < _Span - 0.1f;
+
+			float stripLo = gapLo + (rounded && lowIsEdge ? w : 0.0f);
+			float stripHi = gapHi - (rounded && highIsEdge ? w : 0.0f);
+
+			if (stripHi - stripLo > 0.1f)
+				AddSidewalkStrip(_Mesh, _Material, _Cache, _Center + _Lateral * stripHi, _Center + _Lateral * stripLo, _Outward,
+					!rounded && highIsEdge, !rounded && lowIsEdge);
+
+			if (i < openings.Count)
+				cursor = openings[i].Hi;
 		}
 	}
 
@@ -135,11 +338,6 @@ public partial class RoadIntersectionComponent
 	{
 		var cache = new Dictionary<Vector3, HalfEdgeMesh.VertexHandle>();
 
-		bool n = RectangleExits.HasFlag(RectangleExit.North);
-		bool s = RectangleExits.HasFlag(RectangleExit.South);
-		bool e = RectangleExits.HasFlag(RectangleExit.East);
-		bool w = RectangleExits.HasFlag(RectangleExit.West);
-
 		Vector3 right = Vector3.Right;
 		Vector3 forward = Vector3.Forward;
 		float hw = Width * 0.5f;
@@ -150,37 +348,39 @@ public partial class RoadIntersectionComponent
 		Vector3 pNE = right * hw + forward * hl;
 		Vector3 pSE = right * hw - forward * hl;
 
-		if (!n) AddSidewalkStrip(_Mesh, _Material, cache, pNE, pNW, forward);
-		if (!s) AddSidewalkStrip(_Mesh, _Material, cache, pSW, pSE, -forward);
-		if (!e) AddSidewalkStrip(_Mesh, _Material, cache, pSE, pNE, right);
-		if (!w) AddSidewalkStrip(_Mesh, _Material, cache, pNW, pSW, -right);
+		AddSideSidewalkStrips(_Mesh, _Material, cache, RectangleExit.North, forward * hl, right, forward, hw);
+		AddSideSidewalkStrips(_Mesh, _Material, cache, RectangleExit.South, -forward * hl, -right, -forward, hw);
+		AddSideSidewalkStrips(_Mesh, _Material, cache, RectangleExit.East, right * hw, -forward, right, hl);
+		AddSideSidewalkStrips(_Mesh, _Material, cache, RectangleExit.West, -right * hw, forward, -right, hl);
+
+		var reaches = GetCornerReaches(hw, hl);
 
 		if (CornerSegments > 0)
 		{
-			if (n && e) AddRoundedSidewalkCorner(_Mesh, _Material, cache, pNE, right, forward);
-			else AddCornerCap(_Mesh, _Material, cache, pNE, right, forward, e, n);
+			if (reaches.EastLow && reaches.NorthHigh) AddRoundedSidewalkCorner(_Mesh, _Material, cache, pNE, right, forward);
+			else AddCornerCap(_Mesh, _Material, cache, pNE, right, forward, reaches.EastLow, reaches.NorthHigh);
 
-			if (n && w) AddRoundedSidewalkCorner(_Mesh, _Material, cache, pNW, -right, forward);
-			else AddCornerCap(_Mesh, _Material, cache, pNW, -right, forward, w, n);
+			if (reaches.WestHigh && reaches.NorthLow) AddRoundedSidewalkCorner(_Mesh, _Material, cache, pNW, -right, forward);
+			else AddCornerCap(_Mesh, _Material, cache, pNW, -right, forward, reaches.WestHigh, reaches.NorthLow);
 
-			if (s && e) AddRoundedSidewalkCorner(_Mesh, _Material, cache, pSE, right, -forward);
-			else AddCornerCap(_Mesh, _Material, cache, pSE, right, -forward, e, s);
+			if (reaches.EastHigh && reaches.SouthLow) AddRoundedSidewalkCorner(_Mesh, _Material, cache, pSE, right, -forward);
+			else AddCornerCap(_Mesh, _Material, cache, pSE, right, -forward, reaches.EastHigh, reaches.SouthLow);
 
-			if (s && w) AddRoundedSidewalkCorner(_Mesh, _Material, cache, pSW, -right, -forward);
-			else AddCornerCap(_Mesh, _Material, cache, pSW, -right, -forward, w, s);
+			if (reaches.WestLow && reaches.SouthHigh) AddRoundedSidewalkCorner(_Mesh, _Material, cache, pSW, -right, -forward);
+			else AddCornerCap(_Mesh, _Material, cache, pSW, -right, -forward, reaches.WestLow, reaches.SouthHigh);
 		}
 		else
 		{
-			AddCornerCap(_Mesh, _Material, cache, pNE, right, forward, e, n);
-			AddCornerCap(_Mesh, _Material, cache, pNW, -right, forward, w, n);
-			AddCornerCap(_Mesh, _Material, cache, pSE, right, -forward, e, s);
-			AddCornerCap(_Mesh, _Material, cache, pSW, -right, -forward, w, s);
+			AddCornerCap(_Mesh, _Material, cache, pNE, right, forward, reaches.EastLow, reaches.NorthHigh);
+			AddCornerCap(_Mesh, _Material, cache, pNW, -right, forward, reaches.WestHigh, reaches.NorthLow);
+			AddCornerCap(_Mesh, _Material, cache, pSE, right, -forward, reaches.EastHigh, reaches.SouthLow);
+			AddCornerCap(_Mesh, _Material, cache, pSW, -right, -forward, reaches.WestLow, reaches.SouthHigh);
 		}
 	}
 
 
 
-	private void AddRoundedSidewalkCorner(PolygonMesh _Mesh, Material _Material, Dictionary<Vector3, HalfEdgeMesh.VertexHandle> _Cache, Vector3 _Corner, Vector3 _DirA, Vector3 _DirB)
+	private void AddRoundedSidewalkCorner(PolygonMesh _Mesh, Material _Material, Dictionary<Vector3, HalfEdgeMesh.VertexHandle> _Cache, Vector3 _Corner, Vector3 _DirA, Vector3 _DirB, bool _OuterCorners = true)
 	{
 		Vector3 up = Vector3.Up;
 		float h = SidewalkHeight;
@@ -192,12 +392,13 @@ public partial class RoadIntersectionComponent
 		Vector3 arcCenter = _Corner + _DirA * w + _DirB * w;
 
 		float totalArcLength = w * QuarterTurnRad;
-		float outsideTextureRepeat = SidewalkTextureRepeat * (1.0f + MathF.Max(0.0f, InnerCornersCorrection));
+		float outsideTextureRepeat = SidewalkTextureRepeat * (1.0f + InnerCornersCorrection);
+		float correctedWidth = w * (1.0f + InnerCornersCorrection);
 		float hH = h / outsideTextureRepeat;
 
 		float GetTopV(float _T)
 		{
-			return (_T * totalArcLength) / outsideTextureRepeat;
+			return (_T * totalArcLength) / correctedWidth;
 		}
 
 		void AddOuterFace(Vector3 _Outer0, Vector3 _Outer1, Vector3 _TopOuter0, Vector3 _TopOuter1, float _V0, float _V1)
@@ -271,22 +472,25 @@ public partial class RoadIntersectionComponent
 			// Outer-top U spans the real top-edge width. The inner-top is pushed back by the bevel, so measuring
 			// between the two top vertices (not the ground inner→outer span) keeps U from collapsing to zero — and
 			// the texture from pinching — where the corner narrows to a point at the arc ends.
-			float distOuter0 = Vector3.DistanceBetween(topInner0, topOuter0) / outsideTextureRepeat;
-			float distOuter1 = Vector3.DistanceBetween(topInner1, topOuter1) / outsideTextureRepeat;
+			float distOuter0 = Vector3.DistanceBetween(topInner0, topOuter0) / correctedWidth;
+			float distOuter1 = Vector3.DistanceBetween(topInner1, topOuter1) / correctedWidth;
 
 			// Outer face
-			if (t0 < 0.5f && t1 > 0.5f)
+			if (_OuterCorners)
 			{
-				Vector3 outerTip = _Corner + _DirA * w + _DirB * w;
-				Vector3 topOuterTip = outerTip + up * h;
-				float topVTip = GetTopV(0.5f);
+				if (t0 < 0.5f && t1 > 0.5f)
+				{
+					Vector3 outerTip = _Corner + _DirA * w + _DirB * w;
+					Vector3 topOuterTip = outerTip + up * h;
+					float topVTip = GetTopV(0.5f);
 
-				AddOuterFace(outer0, outerTip, topOuter0, topOuterTip, topV0, topVTip);
-				AddOuterFace(outerTip, outer1, topOuterTip, topOuter1, topVTip, topV1);
-			}
-			else
-			{
-				AddOuterFace(outer0, outer1, topOuter0, topOuter1, topV0, topV1);
+					AddOuterFace(outer0, outerTip, topOuter0, topOuterTip, topV0, topVTip);
+					AddOuterFace(outerTip, outer1, topOuterTip, topOuter1, topVTip, topV1);
+				}
+				else
+				{
+					AddOuterFace(outer0, outer1, topOuter0, topOuter1, topV0, topV1);
+				}	
 			}
 
 			if (flip)
@@ -327,9 +531,9 @@ public partial class RoadIntersectionComponent
 			}
 		}
 	}
-
-
-
+	
+	
+	
 	private void AddCornerCap(PolygonMesh _Mesh, Material _Material, Dictionary<Vector3, HalfEdgeMesh.VertexHandle> _Cache, Vector3 _CornerPos, Vector3 _DirA, Vector3 _DirB, bool _SideAIsExit, bool _SideBIsExit)
 	{
 		// A beveled inner edge turns the square corner into a mitred/inset top with a sloped curb, so it's built
@@ -458,10 +662,8 @@ public partial class RoadIntersectionComponent
 		{
 			float da = Vector3.Dot(p - pCenter, _DirA);
 			float db = Vector3.Dot(p - pCenter, _DirB);
-			// Pin the inner (chamfer) edge to U=0 and the outer corner to U=uW so the texture slides back with the
-			// bevel (matching the abutting strips / single-exit caps) instead of staying anchored to the road corner.
 			float denom = w - b;
-			float u = denom > 0.001f ? MathF.Max(0.0f, MathF.Max(da, db) - b) / denom * uW : 0.0f;
+			float u = denom > 0.001f ? MathF.Max(0.0f, MathF.Max(da, db) - b) / denom : 0.0f;
 			return new Vector2(u, MathF.Min(da, db) / SidewalkTextureRepeat);
 		}
 
@@ -506,8 +708,8 @@ public partial class RoadIntersectionComponent
 		// when that side is an exit (seEnd / nwEnd), otherwise it stays at the square top corner (tA / tB).
 		Vector3 outerAInner = _SideAIsExit ? seEnd : tA;
 		Vector3 outerBInner = _SideBIsExit ? nwEnd : tB;
-		Quad(outerAInner, pA, pOuter, tOuter, new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0), new Vector2(0, 0));
-		Quad(tOuter, pOuter, pB, outerBInner, new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0), new Vector2(0, 0));
+		Quad(outerAInner, pA, pOuter, tOuter, new Vector2(1, 0), new Vector2(1 - hH, 0), new Vector2(1 - hH, uW), new Vector2(1, uW));
+		Quad(tOuter, pOuter, pB, outerBInner, new Vector2(1, 0), new Vector2(1 - hH, 0), new Vector2(1 - hH, uW), new Vector2(1, uW));
 
 		// An exit side has no abutting strip, so the cap draws that side's own sloped curb along the inner edge.
 		if (_SideAIsExit)
@@ -556,7 +758,7 @@ public partial class RoadIntersectionComponent
 
 
 
-	private void AddSidewalkStrip(PolygonMesh _Mesh, Material _Material, Dictionary<Vector3, HalfEdgeMesh.VertexHandle> _Cache, Vector3 _Start, Vector3 _End, Vector3 _Outward)
+	private void AddSidewalkStrip(PolygonMesh _Mesh, Material _Material, Dictionary<Vector3, HalfEdgeMesh.VertexHandle> _Cache, Vector3 _Start, Vector3 _End, Vector3 _Outward, bool _CapStart = false, bool _CapEnd = false)
 	{
 		Vector3 up = Vector3.Up;
 
@@ -579,13 +781,12 @@ public partial class RoadIntersectionComponent
 		var vOT1 = MeshUtility.GetOrAddVertex(_Mesh, _Cache, ot1);
 
 		float stripLen = (_End - _Start).Length;
-		float uWidth = SidewalkWidth / SidewalkTextureRepeat;
 		float vLen = stripLen / SidewalkTextureRepeat;
 		float hHeight = SidewalkHeight / SidewalkTextureRepeat;
 
 		// Top face
 		MeshUtility.AddTexturedQuad(_Mesh, _Material, vOT0, vOT1, vT1, vT0,
-			new Vector2(uWidth, 0), new Vector2(uWidth, vLen), new Vector2(0, vLen), new Vector2(0, 0));
+			new Vector2(1, 0), new Vector2(1, vLen), new Vector2(0, vLen), new Vector2(0, 0));
 
 		// Inner face (sloped when beveled — U follows the slope length)
 		MeshUtility.AddTexturedQuad(_Mesh, _Material, vT0, vT1, vS1, vS0,
@@ -593,7 +794,35 @@ public partial class RoadIntersectionComponent
 
 		// Outer face
 		MeshUtility.AddTexturedQuad(_Mesh, _Material, vOT1, vOT0, vO0, vO1,
-			new Vector2(0, 0), new Vector2(0, vLen), new Vector2(hHeight, vLen), new Vector2(hHeight, 0));
+			new Vector2(1, vLen), new Vector2(1, 0), new Vector2(1 - hHeight, 0), new Vector2(1 - hHeight, vLen));
+
+		// Curb caps where the strip ends at an opening (rather than a corner), so you don't see into the hollow curb.
+		if (_CapStart)
+			AddStripEndCap(_Mesh, _Material, s0, t0, ot0, o0);
+
+		if (_CapEnd)
+			AddStripEndCap(_Mesh, _Material, s1, t1, ot1, o1);
+	}
+
+	/// <summary>
+	/// Closes one end of a sidewalk strip with its curb cross-section (inner-bottom → inner-top → outer-top →
+	/// outer-bottom). Uses its own vertices — an isolated face the half-edge mesh always accepts — and is double-sided
+	/// so winding can't drop it.
+	/// </summary>
+	private void AddStripEndCap(PolygonMesh _Mesh, Material _Material, Vector3 _InnerBottom, Vector3 _InnerTop, Vector3 _OuterTop, Vector3 _OuterBottom)
+	{
+		float uW = SidewalkWidth / SidewalkTextureRepeat;
+		float hH = SidewalkHeight / SidewalkTextureRepeat;
+
+		var a = _Mesh.AddVertices(_InnerBottom)[0];
+		var b = _Mesh.AddVertices(_InnerTop)[0];
+		var c = _Mesh.AddVertices(_OuterTop)[0];
+		var d = _Mesh.AddVertices(_OuterBottom)[0];
+
+		MeshUtility.AddTexturedQuad(_Mesh, _Material, a, b, c, d,
+			new Vector2(0, 0), new Vector2(0, hH), new Vector2(uW, hH), new Vector2(uW, 0));
+		MeshUtility.AddTexturedQuad(_Mesh, _Material, d, c, b, a,
+			new Vector2(uW, 0), new Vector2(uW, hH), new Vector2(0, hH), new Vector2(0, 0));
 	}
 
 
@@ -627,7 +856,7 @@ public partial class RoadIntersectionComponent
 
 
 
-	private Transform GetRectangleExitTransform(RectangleExit _Side, bool _IncludeSidewalk = false)
+	private Transform GetRectangleExitTransform(RectangleExit _Side, bool _IncludeSidewalk = false, float _Offset = 0.0f)
 	{
 		Vector3 pos = WorldPosition;
 		Rotation rot = WorldRotation;
@@ -651,6 +880,7 @@ public partial class RoadIntersectionComponent
 				break;
 		}
 
+		pos += rot.Right * _Offset; // lateral shift along the side to this opening's position
 		return new Transform { Position = pos, Rotation = rot };
 	}
 }

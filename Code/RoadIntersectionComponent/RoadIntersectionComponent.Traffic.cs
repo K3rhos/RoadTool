@@ -37,15 +37,17 @@ public partial class RoadIntersectionComponent
 
 		if (Shape == IntersectionShape.Rectangle)
 		{
-			foreach (RectangleExit side in Enum.GetValues<RectangleExit>())
+			EnsureRectangleExits();
+
+			foreach (var exit in Exits)
 			{
-				if (side == RectangleExit.None || !RectangleExits.HasFlag(side))
+				if (exit is null)
 					continue;
 
 				exits.Add(new TrafficExit
 				{
-					Transform = GetRectangleExitTransform(side, true),
-					RoadWidth = GetExitRoadWidth(side)
+					Transform = GetRectangleExitTransform(exit.Side, true, exit.Offset),
+					RoadWidth = exit.Width
 				});
 			}
 		}

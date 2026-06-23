@@ -237,6 +237,11 @@ public sealed class RoadTrafficGraph
 					if (i == j || outgoing[j].Count == 0)
 						continue;
 
+					// Skip pairs on the same side (outward directions roughly parallel): linking two openings on one
+					// side would be a U-turn through the box. Harmless on a normal 4-way, where no two sides agree.
+					if (Vector3.Dot(exits[i].Transform.Forward.Normal, exits[j].Transform.Forward.Normal) > 0.7f)
+						continue;
+
 					// Match lanes by lateral position in a frame shared by BOTH exits so a straight-through keeps its
 					// lane. Each exit sorts its lanes by its own right vector, which flips between opposing exits, so
 					// pairing by index swapped left/right and crossed the through-lanes. Re-order both by one common
