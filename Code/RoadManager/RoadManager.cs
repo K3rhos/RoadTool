@@ -52,7 +52,17 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 	/// on a specific player component — but it walks the whole scene each call, so plug this in for big maps / many spots.
 	/// </summary>
 	public static Func<IEnumerable<GameObject>> FindPlayers { get; set; }
-	
+
+	/// <summary>
+	/// Optional override for how the tool drives a vehicle as NPC traffic. Set this from your game to hook your OWN car
+	/// controller in WITHOUT touching the road tool (and without your vehicle code referencing this library): given a
+	/// spawned vehicle GameObject, return a <see cref="RoadVehicleDriver"/> wired to its controller, or null if it isn't
+	/// a drivable physics car (the tool then moves it kinematically on rails). This is the single seam between the
+	/// traffic AI and a vehicle's physics/controller. Leave it null and the default applies — it wires the included
+	/// <see cref="DemoCarController"/> so the demo works out of the box.
+	/// </summary>
+	public static Func<GameObject, RoadVehicleDriver> ResolveVehicleDriver { get; set; }
+
 	private RoadTrafficGraph m_Graph;
 	private readonly List<TrafficVehicle> m_Vehicles = [];
 	private readonly List<(TrafficLane Lane, int Index)> m_SpawnSlots = []; // candidate spawn points along the lanes, rebuilt with the graph
@@ -188,6 +198,41 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 		}
 
 		return false;
+	}
+
+
+
+	/// <summary>
+	/// The control surface the traffic AI drives for <paramref name="_Vehicle"/>. Comes from
+	/// <see cref="ResolveVehicleDriver"/> when a game has hooked its own controller, otherwise the built-in default:
+	/// wire the included <see cref="DemoCarController"/> if present. Returns null when the vehicle has no drivable
+	/// controller — the brain then falls back to lightweight on-rails movement.
+	/// </summary>
+	public static RoadVehicleDriver GetVehicleDriver(GameObject _Vehicle)
+	{
+		if (ResolveVehicleDriver is not null)
+			return ResolveVehicleDriver(_Vehicle);
+
+		// Default: wire the demo car so the included demo works with no game-side hook. A real game sets
+		// ResolveVehicleDriver to map its own controller instead — that controller never references this library.
+		var demo = _Vehicle.GetComponent<DemoCarController>();
+
+		if (demo is null)
+			return null;
+
+		return new RoadVehicleDriver
+		{
+			IsPlayerDriving = () => demo.IsDriven,
+			Velocity = () => demo.Rigidbody.IsValid() ? demo.Rigidbody.Velocity : Vector3.Zero,
+			SetAiControlled = _Ai => demo.IsAiControlled = _Ai,
+			Drive = (_Throttle, _Steer, _Handbrake) =>
+			{
+				demo.AiThrottle = _Throttle;
+				demo.AiSteer = _Steer;
+				demo.AiHandbrake = _Handbrake;
+			},
+			MaxSteering = demo.GetMaxSteering
+		};
 	}
 	
 	

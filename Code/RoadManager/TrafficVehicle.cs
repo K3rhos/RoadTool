@@ -54,7 +54,7 @@ public sealed class TrafficVehicle : Component
 
 	/// <summary>
 	/// True while this brain is actually driving the car as an NPC: the component is active and no player has taken
-	/// the wheel. This is the single authority for "AI controlled" — the <see cref="CarController"/> just mirrors it,
+	/// the wheel. This is the single authority for "AI controlled" — the vehicle's controller just mirrors it,
 	/// and other vehicles read it to tell a managed NPC apart from a player's (stolen) car. An on-rails vehicle with
 	/// no controller is AI-controlled whenever it's active.
 	/// </summary>
@@ -113,7 +113,8 @@ public sealed class TrafficVehicle : Component
 	private int m_Id;
 	private float m_FrontExtent;
 	private float m_RearExtent;
-	private DemoCarController m_Car;
+	private RoadVehicleDriver m_Driver; // resolved control surface for this vehicle's controller (null ⇒ kinematic on-rails)
+	private float m_LastSteer;          // last AI steer we pushed; reused to swing the entity look-ahead
 	private bool m_PlayerTookOver;   // a player has driven this car → it's theirs now; the AI never reclaims it
 	private AIState m_State = AIState.Normal;
 	private float m_BlockedTime;     // seconds blocked by an entity (patience timer)
@@ -153,9 +154,10 @@ public sealed class TrafficVehicle : Component
 		WorldRotation = Rotation.LookAt(m_Heading, Vector3.Up);
 
 		ComputeForwardExtents();
-		
-		// If the spawned prefab is a real physics car, we drive it through its controller instead of on rails.
-		m_Car = GetComponent<DemoCarController>();
+
+		// If the spawned prefab has a drivable controller (resolved via the manager's hook), drive it through that;
+		// otherwise (null) fall back to lightweight kinematic on-rails movement.
+		m_Driver = RoadManager.GetVehicleDriver(GameObject);
 	}
 
 
@@ -224,15 +226,15 @@ public sealed class TrafficVehicle : Component
 			return;
 
 		// Once a player takes the wheel of this car, it's theirs for good — latch it so the AI never reclaims it.
-		if (m_Car.IsValid() && m_Car.IsDriven)
+		if (m_Driver is not null && (m_Driver.IsPlayerDriving?.Invoke() ?? false))
 			m_PlayerTookOver = true;
 
-		// With a physics CarController on the object, feed it engine/brake/steer and let physics move it; otherwise
-		// fall back to the lightweight on-rails movement (kinematic placeholder vehicles).
-		if (m_Car.IsValid())
+		// With a drivable controller, feed it engine/brake/steer and let physics move it; otherwise fall back to the
+		// lightweight on-rails movement (kinematic placeholder vehicles).
+		if (m_Driver is not null)
 		{
-			// We own the "is the AI driving?" decision; mirror it onto the shared controller, then drive if it's ours.
-			m_Car.IsAiControlled = IsAiControlled;
+			// We own the "is the AI driving?" decision; mirror it onto the controller, then drive if it's ours.
+			m_Driver.SetAiControlled?.Invoke(IsAiControlled);
 
 			if (IsAiControlled)
 				DriveCarController();
@@ -242,6 +244,25 @@ public sealed class TrafficVehicle : Component
 			DriveOnRails();
 		}
 	}
+
+
+
+	// Pushes the AI's per-frame inputs to the vehicle controller, remembering the steer for the look-ahead swing.
+	private void PushDrive(float _Throttle, float _Steer, bool _Handbrake)
+	{
+		m_LastSteer = _Steer;
+		m_Driver?.Drive?.Invoke(_Throttle, _Steer, _Handbrake);
+	}
+
+
+
+	// The vehicle body's velocity via the driver hook (zero if the controller doesn't expose one).
+	private Vector3 BodyVelocity() => m_Driver?.Velocity?.Invoke() ?? Vector3.Zero;
+
+
+
+	// Max steering angle (degrees) for the entity look-ahead swing; sensible fallback if the controller omits it.
+	private float MaxSteer() => m_Driver?.MaxSteering?.Invoke() ?? 35.0f;
 
 
 
@@ -313,8 +334,7 @@ public sealed class TrafficVehicle : Component
 		if (!fwd.IsNearZeroLength)
 			m_Heading = fwd.Normal;
 
-		bool hasBody = m_Car.Rigidbody.IsValid();
-		float planarSpeed = hasBody ? m_Car.Rigidbody.Velocity.WithZ(0.0f).Length : 0.0f;
+		float planarSpeed = BodyVelocity().WithZ(0.0f).Length;
 
 		// If we've been knocked off our route (e.g. rammed off a bridge), re-localize onto the nearest road AT OUR
 		// HEIGHT rather than blindly steering toward the old waypoints — which, being a 2-D chase, would drive us to
@@ -357,7 +377,7 @@ public sealed class TrafficVehicle : Component
 		// Throttle chases the desired speed; a negative value brakes (the CarController reads reverse-while-rolling-
 		// forward as a brake). To STOP we brake only while still rolling, then cut throttle and hold with the
 		// handbrake — pushing negative throttle once stopped would make the controller drive in reverse instead.
-		float forwardSpeed = hasBody ? Vector3.Dot(m_Car.Rigidbody.Velocity, WorldRotation.Forward) : 0.0f;
+		float forwardSpeed = Vector3.Dot(BodyVelocity(), WorldRotation.Forward);
 		bool wantStop = desiredSpeed < StopSpeed;
 
 		float throttle;
@@ -380,9 +400,7 @@ public sealed class TrafficVehicle : Component
 			throttle = ((desiredSpeed - forwardSpeed) * ThrottleGain).Clamp(-1.0f, 1.0f);
 		}
 		
-		m_Car.AiThrottle = throttle;
-		m_Car.AiSteer = steer;
-		m_Car.AiHandbrake = handbrake;
+		PushDrive(throttle, steer, handbrake);
 	}
 
 
@@ -629,8 +647,8 @@ public sealed class TrafficVehicle : Component
 	//     backs out and goes around anything it truly can't move.
 	private void DriveRoadRage()
 	{
-		float forwardSpeed = m_Car.Rigidbody.IsValid() ? Vector3.Dot(m_Car.Rigidbody.Velocity, WorldRotation.Forward) : 0.0f;
-		float planarSpeed = m_Car.Rigidbody.IsValid() ? m_Car.Rigidbody.Velocity.WithZ(0.0f).Length : 0.0f;
+		float forwardSpeed = Vector3.Dot(BodyVelocity(), WorldRotation.Forward);
+		float planarSpeed = BodyVelocity().WithZ(0.0f).Length;
 
 		bool entityBlocking = !m_RageGiveUp && m_EntityAhead < Spacing;
 
@@ -674,9 +692,7 @@ public sealed class TrafficVehicle : Component
 			if (m_ReverseTime >= RageReverseDuration)
 				m_RageReversing = false;
 
-			m_Car.AiThrottle = -1.0f;
-			m_Car.AiSteer = 0.0f;   // back straight to open up room; the forward arc does the going-around
-			m_Car.AiHandbrake = false;
+			PushDrive(-1.0f, 0.0f, false);   // back straight to open up room; the forward arc does the going-around
 			m_SpeedScale = 0.0f;
 			return;
 		}
@@ -693,9 +709,7 @@ public sealed class TrafficVehicle : Component
 				target += side.Normal * (m_RageSwerve * RageAroundClearance);
 		}
 
-		m_Car.AiThrottle = ((m_Lane.SpeedLimit - forwardSpeed) * ThrottleGain).Clamp(0.3f, 1.0f);
-		m_Car.AiSteer = SteerToward(target);
-		m_Car.AiHandbrake = false;
+		PushDrive(((m_Lane.SpeedLimit - forwardSpeed) * ThrottleGain).Clamp(0.3f, 1.0f), SteerToward(target), false);
 		m_SpeedScale = 1.0f;
 	}
 
@@ -1202,8 +1216,8 @@ public sealed class TrafficVehicle : Component
 		// Swing the look direction toward where we're steering, so the sweep covers the turn we're taking.
 		Vector3 lookDir = m_Heading;
 
-		if (m_Car.IsValid() && m_Car.IsAiControlled)
-			lookDir = Rotation.FromYaw(m_Car.AiSteer * m_Car.GetMaxSteering()) * lookDir;
+		if (m_Driver is not null && IsAiControlled)
+			lookDir = Rotation.FromYaw(m_LastSteer * MaxSteer()) * lookDir;
 		
 		Vector3 from = WorldPosition + m_Heading * m_FrontExtent; // start at the front bumper
 		Vector3 to = from + lookDir * Spacing * 0.5f;
