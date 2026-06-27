@@ -573,13 +573,54 @@ public partial class RoadIntersectionComponent
 		float uW = SidewalkWidth / SidewalkTextureRepeat;
 		float hH = SidewalkHeight / SidewalkTextureRepeat;
 
-		Vector2 uvA = !_SideAIsExit ? new Vector2(uW, 0) : new Vector2(0, uW);
-		Vector2 uvB = !_SideBIsExit ? new Vector2(uW, 0) : new Vector2(0, uW);
+		Vector3 lengthDir = _SideAIsExit ? _DirB : _DirA;
+		Vector3 widthDir  = _SideAIsExit ? _DirA : _DirB;
+		
+		Vector2 GetTopUV(Vector3 p)
+		{
+			Vector3 local = p - tCenter;
 
+			float u = Vector3.Dot(local, lengthDir) / SidewalkWidth;
+			float v = Vector3.Dot(local, widthDir) / SidewalkTextureRepeat;
+
+			return new Vector2(u, v);
+		}
+		
+		Vector2 FoldTopUV(Vector3 p)
+		{
+			float da = Vector3.Dot(p - pCenter, _DirA);
+			float db = Vector3.Dot(p - pCenter, _DirB);
+
+			float u = MathF.Max(da, db) / SidewalkWidth;
+			float v = MathF.Min(da, db) / SidewalkTextureRepeat;
+
+			return new Vector2(u, v);
+		}
+		
+		Vector2 uvTC, uvTA, uvTB, uvTO;
+
+		if (!_SideAIsExit && !_SideBIsExit)
+		{
+			// Interior corner: fold texture
+			uvTC = FoldTopUV(tCenter);
+			uvTA = FoldTopUV(tA);
+			uvTB = FoldTopUV(tB);
+			uvTO = FoldTopUV(tOuter);
+		}
+		else
+		{
+			// Exterior / dead-end corner: keep texture straight
+			uvTC = GetTopUV(tCenter);
+			uvTA = GetTopUV(tA);
+			uvTB = GetTopUV(tB);
+			uvTO = GetTopUV(tOuter);
+		}
+		
 		if (flip)
 		{
-			MeshUtility.AddTexturedTriangle(_Mesh, _Material, vTO, vTC, vTA, new Vector2(uW, uW), new Vector2(0, 0), uvA);
-			MeshUtility.AddTexturedTriangle(_Mesh, _Material, vTO, vTB, vTC, new Vector2(uW, uW), uvB, new Vector2(0, 0));
+			MeshUtility.AddTexturedTriangle(_Mesh, _Material, vTO, vTC, vTA, uvTO, uvTC, uvTA);
+
+			MeshUtility.AddTexturedTriangle(_Mesh, _Material, vTO, vTB, vTC, uvTO, uvTB, uvTC);
 
 			MeshUtility.AddTexturedQuad(_Mesh, _Material, vTA, vA, vOuter, vTO,
 				new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0), new Vector2(0, 0));
@@ -588,8 +629,9 @@ public partial class RoadIntersectionComponent
 		}
 		else
 		{
-			MeshUtility.AddTexturedTriangle(_Mesh, _Material, vTO, vTA, vTC, new Vector2(uW, uW), uvA, new Vector2(0, 0));
-			MeshUtility.AddTexturedTriangle(_Mesh, _Material, vTO, vTC, vTB, new Vector2(uW, uW), new Vector2(0, 0), uvB);
+			MeshUtility.AddTexturedTriangle(_Mesh, _Material, vTO, vTA, vTC, uvTO, uvTA, uvTC);
+
+			MeshUtility.AddTexturedTriangle(_Mesh, _Material, vTO, vTC, vTB, uvTO, uvTC, uvTB);
 
 			MeshUtility.AddTexturedQuad(_Mesh, _Material, vTO, vOuter, vA, vTA,
 				new Vector2(0, uW), new Vector2(hH, uW), new Vector2(hH, 0), new Vector2(0, 0));
@@ -650,6 +692,8 @@ public partial class RoadIntersectionComponent
 		float uW = w / SidewalkTextureRepeat;
 		float hH = h / SidewalkTextureRepeat;
 		float bV = CurbBevelV;
+		
+		float vLen = SidewalkWidth / SidewalkTextureRepeat;
 
 		// Top-face UV. The inner edges are pushed back by the bevel, so the projection is offset by the bevel to keep
 		// the texture pinned to those receding edges — it slides back with the bevel like the straight strips do,
@@ -717,7 +761,7 @@ public partial class RoadIntersectionComponent
 
 		if (_SideBIsExit)
 			Quad(pCenter, eEnd, nwEnd, pB, new Vector2(bV, 0), new Vector2(0, 0), new Vector2(0, uW), new Vector2(bV, uW));
-
+		
 		// Top surface (the square minus the bevel inset). A strip side insets to eEnd/nEnd; an exit side insets
 		// straight across to seEnd/nwEnd.
 		if (!_SideAIsExit && !_SideBIsExit)
@@ -733,13 +777,11 @@ public partial class RoadIntersectionComponent
 		}
 		else if (_SideAIsExit && !_SideBIsExit)
 		{
-			// Inner edge nEnd→seEnd pinned to U=0 so the top texture recedes with the bevel and matches the B strip.
-			Quad(nEnd, seEnd, tOuter, tB, new Vector2(0, 0), new Vector2(0, uW), new Vector2(uW, uW), new Vector2(uW, 0));
+			Quad(nEnd, seEnd, tOuter, tB, new Vector2(0, vLen), new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, vLen));
 		}
 		else if (!_SideAIsExit && _SideBIsExit)
 		{
-			// Inner edge eEnd→nwEnd pinned to U=0 so the top texture recedes with the bevel and matches the A strip.
-			Quad(eEnd, tA, tOuter, nwEnd, new Vector2(0, 0), new Vector2(uW, 0), new Vector2(uW, uW), new Vector2(0, uW));
+			Quad(eEnd, tA, tOuter, nwEnd, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, vLen), new Vector2(0, vLen));
 		}
 		else
 		{
