@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Sandbox;
+using Sandbox.UI;
 
 namespace RedSnail.RoadTool;
 
@@ -58,7 +59,7 @@ public sealed class TrafficVehicle : Component
 	/// and other vehicles read it to tell a managed NPC apart from a player's (stolen) car. An on-rails vehicle with
 	/// no controller is AI-controlled whenever it's active.
 	/// </summary>
-	public bool IsAiControlled => Active && !m_PlayerTookOver;
+	public bool IsAiControlled => Active && !m_PlayerTookOver && Graph is not null && m_Path.Count >= 2;
 
 	/// <summary>True while driving a road lane; false while crossing an intersection or connector.</summary>
 	public bool IsOnRoadLane => m_Lane?.IsRoadLane ?? true;
@@ -351,10 +352,23 @@ public sealed class TrafficVehicle : Component
 
 		if (m_Path.Count < 2)
 			return;
-
+		
 		// Patience / road-rage state machine, then the aggressive driver takes over for the whole rage.
 		m_EntityAhead = NearestEntityAhead();
 		UpdateAIState(planarSpeed);
+
+		if (Game.IsPlaying && RoadManager.Current.ShowOverlays)
+		{
+			ModelRenderer renderer = GetComponentInChildren<ModelRenderer>();
+
+			if (!renderer.IsValid())
+				return;
+			
+			if (m_State == AIState.RoadRage)
+				DebugOverlay.Box(BBox.FromPositionAndSize(renderer.Bounds.Center, renderer.Bounds.Size), Color.Red);
+			else
+				DebugOverlay.Box(BBox.FromPositionAndSize(renderer.Bounds.Center, renderer.Bounds.Size), Color.Green);
+		}
 
 		if (m_State == AIState.RoadRage)
 		{

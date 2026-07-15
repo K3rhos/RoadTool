@@ -71,20 +71,30 @@ public sealed class EntityFade : Component
 			DestroyGameObject();
 	}
 	
-	[Rpc.Broadcast(NetFlags.HostOnly)]
 	public void FadeIn()
 	{
 		_ = AsyncFadeIn();
 	}
 	
-	[Rpc.Broadcast(NetFlags.HostOnly)]
 	public void FadeOut()
 	{
 		_ = AsyncFadeOut();
 	}
 	
 	[Rpc.Broadcast(NetFlags.HostOnly)]
-	public void FadeOutAndDestroy()
+	public void FadeInBroadcasted()
+	{
+		_ = AsyncFadeIn();
+	}
+	
+	[Rpc.Broadcast(NetFlags.HostOnly)]
+	public void FadeOutBroadcasted()
+	{
+		_ = AsyncFadeOut();
+	}
+	
+	[Rpc.Broadcast(NetFlags.HostOnly)]
+	public void FadeOutAndDestroyBroadcasted()
 	{
 		_ = AsyncFadeOutAndDestroy();
 	}

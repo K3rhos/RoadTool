@@ -98,7 +98,7 @@ public sealed class ParkingSystem : Component
 
 			if (entityFade.IsValid())
 			{
-				entityFade.FadeOutAndDestroy();
+				entityFade.FadeOutAndDestroyBroadcasted();
 			}
 			else
 			{
@@ -111,6 +111,9 @@ public sealed class ParkingSystem : Component
 	
 	protected override void DrawGizmos()
 	{
+		if (Gizmo.CameraTransform.Position.Distance(WorldPosition) > Gizmo.Settings.GizmoRenderDistance)
+			return;
+		
 		if (!Gizmo.IsSelected)
 		{
 			Gizmo.Draw.LineBBox(SpawnArea);
@@ -211,7 +214,7 @@ public sealed class ParkingSystem : Component
 
 				if (entityFade.IsValid())
 				{
-					entityFade.FadeOutAndDestroy();
+					entityFade.FadeOutAndDestroyBroadcasted();
 				}
 				else
 				{
@@ -236,20 +239,36 @@ public sealed class ParkingSystem : Component
 	{
 		Angles angles = CalculateSpawnAngles();
 		GameObject vehiclePrefab = GetRandomVehiclePrefab();
-
+		
 		GameObject vehicle = vehiclePrefab.Clone(WorldPosition, angles);
 		vehicle.NetworkSpawn(Connection.Host);
 		vehicle.Network.SetOrphanedMode(NetworkOrphaned.Host);
 		vehicle.Network.SetOwnerTransfer(OwnerTransfer.Request);
 		
 		var renderer = vehicle.GetComponent<ModelRenderer>();
-
-		// Give it a cool random tint
+		
 		if (renderer.IsValid())
 		{
-			renderer.Tint = new Color(Game.Random.NextSingle(), Game.Random.NextSingle(), Game.Random.NextSingle(), renderer.Tint.a);
+			// Give it a cool random tint
+			{
+				renderer.Tint = new Color(Game.Random.NextSingle(), Game.Random.NextSingle(), Game.Random.NextSingle(), renderer.Tint.a);
 			
-			Network.Refresh(renderer);
+				Network.Refresh(renderer);
+			}
+
+			// Properly place the vehicle on the ground
+			{
+				// Bottom of the vehicle in world space
+				float bottomZ = renderer.Bounds.Mins.z;
+				
+				// Target ground height
+				float groundZ = SpawnArea.Transform(WorldTransform).Mins.z;
+
+				// Offset required to place bottom on ground
+				float offsetZ = groundZ - bottomZ;
+				
+				vehicle.WorldPosition += Vector3.Up * offsetZ;
+			}
 		}
 		
 		m_SpawnedVehicles.Add(vehicle);

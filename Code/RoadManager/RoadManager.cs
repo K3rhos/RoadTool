@@ -25,6 +25,7 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 	[Property(Title = "Stop Margin"), Feature("Traffic"), Category("Vehicles"), Range(0.0f, 500.0f)] private float StopMargin { get; set; } = 150.0f;
 
 	[Property(Title = "Density"), Feature("Traffic"), Category("Streaming"), Range(0.0f, 1.0f)] private float TrafficDensity { get; set; } = 0.15f;
+	[Property(Title = "Clustering"), Feature("Traffic"), Category("Streaming"), Range(0.0f, 1.0f)] private float TrafficClustering { get; set; } = 0.0f;
 	[Property(Title = "Spawn Min Range"), Feature("Traffic"), Category("Streaming"), Range(0.0f, 20000.0f)] private float TrafficSpawnMinDistance { get; set; } = 3000.0f;
 	[Property(Title = "Spawn Range"), Feature("Traffic"), Category("Streaming"), Range(500.0f, 20000.0f)] private float TrafficSpawnDistance { get; set; } = 5000.0f;
 	[Property(Title = "Despawn Range"), Feature("Traffic"), Category("Streaming"), Range(500.0f, 20000.0f)] private float TrafficDespawnDistance { get; set; } = 7000.0f;
@@ -81,7 +82,7 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 	
 	protected override void OnAwake()
 	{
-		Current ??= this;
+		Current = this;
 	}
 	
 	
@@ -290,7 +291,7 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 
 				if (entityFade.IsValid())
 				{
-					entityFade.FadeOutAndDestroy();
+					entityFade.FadeOutAndDestroyBroadcasted();
 				}
 				else
 				{
@@ -336,13 +337,13 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 		if (deficit <= 0)
 			return;
 
-		// Walk the slots from a random offset so we don't always favour the same lanes, spawning at any that sit in the
-		// ring (near enough to matter, far enough not to pop in) and aren't already occupied by another car.
-		int start = Game.Random.Next(m_SpawnSlots.Count);
+		// Walk the slots in a clustering-controlled order, spawning at any that sit in the ring (near enough to matter,
+		// far enough not to pop in) and aren't already occupied by another car.
+		var order = BuildSpawnOrder();
 
-		for (int n = 0; n < m_SpawnSlots.Count && deficit > 0; n++)
+		for (int n = 0; n < order.Count && deficit > 0; n++)
 		{
-			var slot = m_SpawnSlots[(start + n) % m_SpawnSlots.Count];
+			var slot = m_SpawnSlots[order[n]];
 			Vector3 pos = slot.Lane.Waypoints[slot.Index];
 			float nearestSq = NearestDistanceSq(pos, _Players);
 
@@ -355,6 +356,53 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 			SpawnVehicleAt(slot.Lane, slot.Index);
 			deficit--;
 		}
+	}
+
+
+
+	// The order the streaming pass tries spawn slots in, which decides how "grouped" traffic looks. The slot list is
+	// laid out lane-by-lane (every slot of lane A, then lane B...), so walking it in order packs whole lanes into long
+	// nose-to-tail platoons. TrafficClustering controls how much of that ordering we keep: at 1 we walk the whole list
+	// in sequence (the original platoons), at 0 we fully shuffle so each spawn lands on an unrelated lane and traffic
+	// scatters across the network. In between we keep short contiguous "runs" (little groups) but deliver the runs in
+	// random order, so you get a few small clusters spread over many lanes.
+	private List<int> BuildSpawnOrder()
+	{
+		int n = m_SpawnSlots.Count;
+		var order = new List<int>(n);
+
+		if (n == 0)
+			return order;
+
+		// Run length scales with clustering: a single slot (fully scattered) at 0, the whole list (one lane-by-lane
+		// platoon) at 1.
+		int run = Math.Max(1, (int)MathF.Round(MathX.Lerp(1.0f, n, TrafficClustering)));
+
+		// Rotate by a random offset so we don't always favour the same lanes.
+		int start = Game.Random.Next(n);
+
+		// Split the rotated list into contiguous runs.
+		var runs = new List<int>(); // each entry is a run's start offset into the rotated list
+
+		for (int offset = 0; offset < n; offset += run)
+			runs.Add(offset);
+
+		// Shuffle the run order (Fisher-Yates) so groups arrive scattered; within a run we keep order so it stays a group.
+		for (int i = runs.Count - 1; i > 0; i--)
+		{
+			int j = Game.Random.Next(i + 1);
+			(runs[i], runs[j]) = (runs[j], runs[i]);
+		}
+
+		foreach (int offset in runs)
+		{
+			int len = Math.Min(run, n - offset);
+
+			for (int k = 0; k < len; k++)
+				order.Add((start + offset + k) % n);
+		}
+
+		return order;
 	}
 
 
@@ -511,10 +559,32 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 		vehicle.Initialize(m_Graph, _Lane, _Index, Game.Random.Next());
 
 		var renderer = clone.GetComponent<ModelRenderer>();
-
-		// Give it a cool random tint
+		
 		if (renderer.IsValid())
+		{
+			// Give it a cool random tint
 			renderer.Tint = new Color(Game.Random.NextSingle(), Game.Random.NextSingle(), Game.Random.NextSingle(), renderer.Tint.a);
+			
+			// Properly place the vehicle on the ground (if it's a physic based vehicle)
+			var rb = clone.GetComponent<Rigidbody>();
+
+			if (rb.IsValid())
+			{
+				// Bottom of the vehicle in world space
+				float bottomZ = renderer.Bounds.Mins.z;
+
+				// Target ground height
+				float groundZ = spawnPos.z;
+
+				// Offset required to place bottom on ground
+				float offsetZ = groundZ - bottomZ;
+
+				Vector3 position = _Lane.Waypoints[_Index];
+				position.z = clone.WorldPosition.z + offsetZ + 10.0f;
+			
+				clone.WorldPosition = position;	
+			}
+		}
 
 		Network.Refresh(renderer);
 		
