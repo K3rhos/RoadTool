@@ -241,6 +241,9 @@ public sealed class ParkingSystem : Component
 		GameObject vehiclePrefab = GetRandomVehiclePrefab();
 		
 		GameObject vehicle = vehiclePrefab.Clone(WorldPosition, angles);
+
+		RoadManager.OnBeforeParkedVehicleSpawn?.Invoke(vehicle);
+		
 		vehicle.NetworkSpawn(Connection.Host);
 		vehicle.Network.SetOrphanedMode(NetworkOrphaned.Host);
 		vehicle.Network.SetOwnerTransfer(OwnerTransfer.Request);

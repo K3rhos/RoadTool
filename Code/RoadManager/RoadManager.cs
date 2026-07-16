@@ -24,7 +24,7 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 	[Property(Title = "Spawn Gap"), Feature("Traffic"), Category("Vehicles"), Range(50.0f, 1000.0f)] private float SpawnGap { get; set; } = 250.0f;
 	[Property(Title = "Stop Margin"), Feature("Traffic"), Category("Vehicles"), Range(0.0f, 500.0f)] private float StopMargin { get; set; } = 150.0f;
 
-	[Property(Title = "Density"), Feature("Traffic"), Category("Streaming"), Range(0.0f, 1.0f)] private float TrafficDensity { get; set; } = 0.15f;
+	[Property(Title = "Density"), Feature("Traffic"), Category("Streaming"), Range(0.0f, 1.0f)] public float TrafficDensity { get; set; } = 0.15f;
 	[Property(Title = "Clustering"), Feature("Traffic"), Category("Streaming"), Range(0.0f, 1.0f)] private float TrafficClustering { get; set; } = 0.0f;
 	[Property(Title = "Spawn Min Range"), Feature("Traffic"), Category("Streaming"), Range(0.0f, 20000.0f)] private float TrafficSpawnMinDistance { get; set; } = 3000.0f;
 	[Property(Title = "Spawn Range"), Feature("Traffic"), Category("Streaming"), Range(500.0f, 20000.0f)] private float TrafficSpawnDistance { get; set; } = 5000.0f;
@@ -63,6 +63,8 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 	/// <see cref="DemoCarController"/> so the demo works out of the box.
 	/// </summary>
 	public static Func<GameObject, RoadVehicleDriver> ResolveVehicleDriver { get; set; }
+	
+	public static Action<GameObject> OnBeforeParkedVehicleSpawn { get; set; }
 
 	private RoadTrafficGraph m_Graph;
 	private readonly List<TrafficVehicle> m_Vehicles = [];
@@ -302,9 +304,9 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 			}
 		}
 	}
-
-
-
+	
+	
+	
 	// Tops the area up to the density target by spawning at empty slots inside the spawn ring around players. Density is
 	// a fraction of the road capacity currently near a player, so "1" packs the nearby roads and "0.1" leaves them nearly
 	// empty. Spawns are capped per pass so a fresh area fills in over a second or two rather than in one burst.
