@@ -9,8 +9,25 @@ namespace RedSnail.RoadTool;
 [Icon("signpost")]
 public partial class RoadComponent : Component, Component.ExecuteInEditor, Component.IHasBounds
 {
+	/// <summary>
+	/// Undo/redo and prefab reloads deserialize a brand new <see cref="Sandbox.Spline"/> into this component
+	/// instead of mutating the existing one, so the setter has to move our change listener over. Otherwise the
+	/// subscription stays on the discarded instance and later edits never mark the mesh dirty again.
+	/// </summary>
 	[Property, Feature("General"), Hide]
-	public Spline Spline = new();
+	public Spline Spline
+	{
+		get;
+		set
+		{
+			field = value;
+
+			SubscribeToSpline();
+			UpdateData();
+		}
+	} = new();
+
+	private Spline m_SubscribedSpline;
 
 	private bool m_DoesRoadMeshNeedRebuild;
 
@@ -116,7 +133,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 
 	protected override void OnEnabled()
 	{
-		Spline.SplineChanged += UpdateData;
+		SubscribeToSpline();
 
 		EnsureLanes(); // migrate/seed the lane layout before anything that reads it (lines mesh, traffic graph) runs
 
@@ -134,7 +151,7 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 
 	protected override void OnDisabled()
 	{
-		Spline.SplineChanged -= UpdateData;
+		UnsubscribeFromSpline();
 
 		RemoveRoadMesh();
 		RemoveSidewalkMesh();
@@ -147,8 +164,22 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 
 
 
+	/// <summary>
+	/// Undo/redo restores the serialized spline data in place, which does not raise
+	/// <see cref="Sandbox.Spline.SplineChanged"/>. Rebuilding from here is what makes the mesh follow an undo.
+	/// </summary>
+	protected override void OnValidate()
+	{
+		SubscribeToSpline();
+		UpdateData();
+	}
+
+
+
 	protected override void OnUpdate()
 	{
+		SyncSplineSubscription();
+
 		UpdateRoadMeshes();
 		UpdateLines();
 		UpdateDecals();
@@ -238,9 +269,53 @@ public partial class RoadComponent : Component, Component.ExecuteInEditor, Compo
 
 
 
+	/// <summary>
+	/// Safety net for editor state changes that swap the spline instance without ever touching the
+	/// property setter or <see cref="OnValidate"/>. A reference compare per frame is cheap enough to
+	/// be worth never silently losing the subscription again.
+	/// </summary>
+	private void SyncSplineSubscription()
+	{
+		if (ReferenceEquals(m_SubscribedSpline, Spline))
+			return;
+
+		SubscribeToSpline();
+		UpdateData();
+	}
+
+
+
+	private void SubscribeToSpline()
+	{
+		if (ReferenceEquals(m_SubscribedSpline, Spline))
+			return;
+
+		UnsubscribeFromSpline();
+
+		m_SubscribedSpline = Spline;
+
+		if (m_SubscribedSpline is not null)
+			m_SubscribedSpline.SplineChanged += UpdateData;
+	}
+
+
+
+	private void UnsubscribeFromSpline()
+	{
+		if (m_SubscribedSpline is null)
+			return;
+
+		m_SubscribedSpline.SplineChanged -= UpdateData;
+		m_SubscribedSpline = null;
+	}
+
+
+
 	private void UpdateData()
 	{
-		if (Scene.IsEditor)
-			IsDirty = true;
+		if (!GameObject.IsValid() || !Scene.IsEditor)
+			return;
+
+		IsDirty = true;
 	}
 }
