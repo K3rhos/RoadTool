@@ -197,9 +197,21 @@ public sealed class ParkingSystem : Component
 			
 			foreach (var vehicle in m_SpawnedVehicles)
 			{
-				if (ArePlayersWithinParkingSpot(RoadManager.Current.ParkedVehicleDespawnDistance))
+				// Already gone — destroyed by traffic, an explosion, whatever. Drop the dangling reference.
+				if (!vehicle.IsValid())
+				{
+					toDelete.Add(vehicle);
+
 					continue;
-			
+				}
+
+				// Measured around the VEHICLE, not around this parking spot. Once someone drives it off,
+				// where it originally spawned says nothing about whether anyone can still see it — asking
+				// the spot would delete a car sitting in plain view just because the player had driven it
+				// away from the bay it came from.
+				if (RoadManager.ArePlayersWithin(vehicle.WorldPosition, RoadManager.Current.ParkedVehicleDespawnDistance))
+					continue;
+
 				if (vehicle.Tags.Has("last_vehicle"))
 					continue;
 
@@ -209,7 +221,10 @@ public sealed class ParkingSystem : Component
 			foreach (var vehicle in toDelete)
 			{
 				m_SpawnedVehicles.Remove(vehicle);
-				
+
+				if (!vehicle.IsValid())
+					continue;
+
 				var entityFade = vehicle.GetComponent<EntityFade>();
 
 				if (entityFade.IsValid())

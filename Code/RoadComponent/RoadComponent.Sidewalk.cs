@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Sandbox;
 
 namespace RedSnail.RoadTool;
@@ -9,12 +10,48 @@ public partial class RoadComponent
 	/// Really useful if you plan to edit the mesh with the mapping tool so you don't accidently erase/rebuild the sidewalk.
 	/// </summary>
 	[Property(Title = "🔒 Locked"), Feature("Sidewalk")] private bool IsSidewalkLocked { get; set; } = false;
-	[Property, FeatureEnabled("Sidewalk", Icon = "directions_walk", Tint = EditorTint.Blue)] private bool HasSidewalk { get; set { field = value; IsDirty = true; } } = true;
+	[Property, FeatureEnabled("Sidewalk", Icon = "directions_walk", Tint = EditorTint.Blue)] public bool HasSidewalk { get; set { field = value; IsDirty = true; } } = true;
 	[Property(Title = "Material"), Feature("Sidewalk")] private Material SidewalkMaterial { get; set { field = value; IsDirty = true; } }
-	[Property(Title = "Width"), Feature("Sidewalk"), Range(10.0f, 500.0f)] private float SidewalkWidth { get; set { field = value; IsDirty = true; } } = 150.0f;
-	[Property(Title = "Height"), Feature("Sidewalk"), Range(0.1f, 100.0f)] private float SidewalkHeight { get; set { field = value; IsDirty = true; } } = 5.0f;
+	[Property(Title = "Width"), Feature("Sidewalk"), Range(10.0f, 500.0f)] public float SidewalkWidth { get; set { field = value; IsDirty = true; } } = 150.0f;
+	[Property(Title = "Height"), Feature("Sidewalk"), Range(0.1f, 100.0f)] public float SidewalkHeight { get; set { field = value; IsDirty = true; } } = 5.0f;
 	[Property(Title = "Inner Bevel"), Feature("Sidewalk"), Range(0.0f, 100.0f)] private float SidewalkBevel { get; set { field = value; IsDirty = true; } } = 0.0f;
 	[Property(Title = "Texture Repeat"), Feature("Sidewalk")] private float SidewalkTextureRepeat { get; set { field = value.Clamp(1.0f, 100000.0f); IsDirty = true; } } = 200.0f;
+
+
+
+	/// <summary>
+	/// Samples the walking line down the MIDDLE of each pavement, in world space — the pedestrian equivalent of
+	/// <see cref="GetTrafficCenterline"/>. Both lists are cleared first, and both come back empty when this road
+	/// has no sidewalks.
+	///
+	/// Offsets and height come from the same numbers <see cref="BuildSidewalkMesh"/> uses, so the points sit on
+	/// the slab you can actually see rather than near it. That matters: guessing a pavement position by pushing
+	/// a lane waypoint sideways lands in the gutter as often as not, and anything that then snaps the result to
+	/// a navmesh quietly drags it back into the road.
+	/// </summary>
+	public void GetSidewalkCenterlines(float _Spacing, List<Vector3> _Left, List<Vector3> _Right)
+	{
+		_Left.Clear();
+		_Right.Clear();
+
+		if (!HasSidewalk)
+			return;
+
+		var positions = new List<Vector3>();
+		var rights = new List<Vector3>();
+
+		GetTrafficCenterline(_Spacing, positions, rights);
+
+		// Middle of the slab, on top of the kerb.
+		float offset = RoadWidth * 0.5f + SidewalkWidth * 0.5f;
+		Vector3 lift = Vector3.Up * SidewalkHeight;
+
+		for (int i = 0; i < positions.Count; i++)
+		{
+			_Left.Add(positions[i] - rights[i] * offset + lift);
+			_Right.Add(positions[i] + rights[i] * offset + lift);
+		}
+	}
 
 
 

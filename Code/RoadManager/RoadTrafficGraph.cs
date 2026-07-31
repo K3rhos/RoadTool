@@ -60,6 +60,50 @@ public sealed class TrafficLane
 	public Vector3 StartPos => Waypoints[0];
 	public Vector3 EndPos => Waypoints[^1];
 
+	/// <summary>
+	/// Total length of this lane, following its waypoints rather than cutting the corner. Computed once and
+	/// cached — the graph is thrown away and rebuilt whenever the layout changes, so it can't go stale.
+	/// </summary>
+	public float Length
+	{
+		get
+		{
+			if (m_Length >= 0.0f)
+				return m_Length;
+
+			m_Length = 0.0f;
+
+			for (int i = 1; i < Waypoints.Count; i++)
+				m_Length += Vector3.DistanceBetween(Waypoints[i - 1], Waypoints[i]);
+
+			return m_Length;
+		}
+	}
+
+	private float m_Length = -1.0f;
+
+	/// <summary>Distance from the waypoint at <paramref name="_Index"/> to the end of the lane.</summary>
+	public float DistanceToEnd(int _Index)
+	{
+		float distance = 0.0f;
+
+		for (int i = Math.Max(1, _Index + 1); i < Waypoints.Count; i++)
+			distance += Vector3.DistanceBetween(Waypoints[i - 1], Waypoints[i]);
+
+		return distance;
+	}
+
+	/// <summary>Distance from the start of the lane to the waypoint at <paramref name="_Index"/>.</summary>
+	public float DistanceFromStart(int _Index)
+	{
+		float distance = 0.0f;
+
+		for (int i = 1; i <= Math.Min(_Index, Waypoints.Count - 1); i++)
+			distance += Vector3.DistanceBetween(Waypoints[i - 1], Waypoints[i]);
+
+		return distance;
+	}
+
 	public Vector3 StartDir
 	{
 		get
@@ -97,12 +141,24 @@ public sealed class TrafficLane
 /// The whole drivable network for a scene. Build it with <see cref="Build"/>, then vehicles walk the lanes and pick
 /// random successors at each junction.
 /// </summary>
-public sealed class RoadTrafficGraph
+public sealed partial class RoadTrafficGraph
 {
 	// Successor heading must agree to at least this dot product — blocks flow into an opposing/over-sharp lane.
 	private const float DirectionDot = 0.25f;
 
 	public readonly List<TrafficLane> Lanes = new();
+
+	/// <summary>
+	/// Walkable pavement lanes — one down the middle of each sidewalk, on both sides of every road that has them.
+	/// Traced from the sidewalk mesh's own geometry, so a waypoint is a place a pedestrian genuinely stands.
+	///
+	/// Deliberately NOT in <see cref="Lanes"/>: everything that reads that list is looking for somewhere to
+	/// drive, and quietly handing it pavements would put traffic on them. Same <see cref="TrafficLane"/> type
+	/// though, so pedestrian routing gets the successor/conflict machinery for free if it's ever wanted.
+	///
+	/// Roads only for now — intersection corners aren't traced, so pavement lanes stop short at junctions.
+	/// </summary>
+	public readonly List<TrafficLane> SidewalkLanes = new();
 
 	private readonly List<TrafficLane> m_RoadLanes = new();
 
@@ -120,10 +176,54 @@ public sealed class RoadTrafficGraph
 
 		graph.AddRoads(_Scene, _Settings);
 		graph.AddIntersections(_Scene, _Settings);
+		graph.AddSidewalks(_Scene, _Settings);
 		graph.ComputeSuccessors();
 		graph.ApplyDeadEndUTurns();
 
 		return graph;
+	}
+
+
+
+	// ── Roads → one walkable lane down each pavement ──────────────────────────────────────────────────────────
+	private void AddSidewalks(Scene _Scene, RoadTrafficSettings _Settings)
+	{
+		var left = new List<Vector3>();
+		var right = new List<Vector3>();
+
+		foreach (var road in _Scene.GetAll<RoadComponent>())
+		{
+			if (!road.IsValid() || !road.Active || !road.HasSidewalk)
+				continue;
+
+			// ExcludeTraffic is deliberately NOT checked: a pedestrianised street has no cars on it and the
+			// most pavement.
+			road.GetSidewalkCenterlines(_Settings.WaypointSpacing, left, right);
+
+			if (left.Count < 2)
+				continue;
+
+			AddSidewalkLane(road, left);
+			AddSidewalkLane(road, right);
+		}
+	}
+
+
+
+	private void AddSidewalkLane(RoadComponent _Road, List<Vector3> _Points)
+	{
+		var lane = new TrafficLane
+		{
+			Owner = _Road,
+			IsRoadLane = false,
+			LaneWidth = _Road.SidewalkWidth,
+			RoadHalfWidth = _Road.RoadWidth * 0.5f,
+			SpeedLimit = 0.0f
+		};
+
+		lane.Waypoints.AddRange(_Points);
+
+		SidewalkLanes.Add(lane);
 	}
 
 

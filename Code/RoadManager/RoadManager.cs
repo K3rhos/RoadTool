@@ -66,6 +66,34 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 	
 	public static Action<GameObject> OnBeforeParkedVehicleSpawn { get; set; }
 
+	/// <summary>
+	/// The lane graph: every road and intersection lane in the scene, with its waypoints, width, speed limit and
+	/// connections. Built on demand, so it's safe to ask for at any point in the frame.
+	///
+	/// Exposed because the layout is useful well beyond traffic — placing a delivery at a junction, a pedestrian on
+	/// the pavement (offset a waypoint by <see cref="TrafficLane.RoadHalfWidth"/> to clear the carriageway), a patrol
+	/// route, a map overlay. Building it needs nothing but the scene, so a client can ask too, even though only the
+	/// host drives traffic.
+	///
+	/// Treat it as read-only: the manager owns it and throws it away whenever the layout changes.
+	/// </summary>
+	public RoadTrafficGraph Graph
+	{
+		get
+		{
+			if (m_Graph is null)
+				RebuildGraph();
+
+			return m_Graph;
+		}
+	}
+
+	/// <summary>The <see cref="Graph"/> of the active manager, or null when there isn't one in the scene.</summary>
+	public static RoadTrafficGraph GetRoadGraph()
+	{
+		return Current.IsValid() ? Current.Graph : null;
+	}
+
 	private RoadTrafficGraph m_Graph;
 	private readonly List<TrafficVehicle> m_Vehicles = [];
 	private readonly List<(TrafficLane Lane, int Index)> m_SpawnSlots = []; // candidate spawn points along the lanes, rebuilt with the graph
