@@ -148,7 +148,7 @@ public sealed class ParkingSystem : Component
 	
 	private bool IsSpawnAreaBlocked()
 	{
-		SceneTraceResult result = Scene.Trace.Box(SpawnArea, WorldPosition, WorldPosition).Rotated(WorldRotation).WithAnyTags("player", "vehicle", "prop").Run();
+		SceneTraceResult result = Scene.Trace.Box(SpawnArea, WorldPosition, WorldPosition).Rotated(WorldRotation).WithAnyTags("player", "vehicle", "prop", "npc", "ped").Run();
 		
 		return result.Hit;
 	}
