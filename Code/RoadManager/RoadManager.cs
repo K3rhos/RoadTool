@@ -290,7 +290,7 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 
 		DespawnStrayVehicles(players);
 
-		if (players.Count > 0 && m_SpawnSlots.Count > 0 && VehicleSet.IsValid() && VehicleSet.Prefabs.Length > 0)
+		if (players.Count > 0 && m_SpawnSlots.Count > 0 && VehicleSet.IsValid() && VehicleSet.HasVehicles)
 			TopUpTraffic(players);
 	}
 
@@ -565,7 +565,11 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 	private void SpawnVehicleAt(TrafficLane _Lane, int _Index)
 	{
 		Vector3 spawnPos = _Lane.Waypoints[_Index] + Vector3.Up * SpawnHeightOffset;
-		GameObject prefab = VehicleSet.Prefabs[Game.Random.Next(VehicleSet.Prefabs.Length)];
+		GameObject prefab = VehicleSet.PickRandomPrefab();
+
+		if (!prefab.IsValid())
+			return;
+
 		GameObject clone = prefab.Clone(spawnPos, Rotation.Identity, Vector3.One);
 
 		if (!clone.IsValid())
@@ -592,8 +596,9 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 		
 		if (renderer.IsValid())
 		{
-			// Give it a cool random tint
-			renderer.Tint = new Color(Game.Random.NextSingle(), Game.Random.NextSingle(), Game.Random.NextSingle(), renderer.Tint.a);
+			// Give it a cool random tint (If the vehicle doesn't have the tag 'notint', add this special tag if you don't want the color of the vehicle to be randomly chosen at spawn)
+			if (!vehicle.Tags.Has("notint"))
+				renderer.Tint = new Color(Game.Random.NextSingle(), Game.Random.NextSingle(), Game.Random.NextSingle(), renderer.Tint.a);
 			
 			// Properly place the vehicle on the ground (if it's a physic based vehicle)
 			var rb = clone.GetComponent<Rigidbody>();

@@ -14,79 +14,171 @@ namespace RedSnail.RoadTool;
 public sealed partial class RoadTrafficGraph
 {
 	/// <summary>
+	/// How far either end of a route may be from a lane and still count as being on it. A road carries a lane
+	/// per direction, so a single point sits near several — see <see cref="FindNearbyLanes"/> for why taking
+	/// them all matters.
+	/// </summary>
+	public const float DefaultRouteSnapRadius = 1000.0f;
+
+
+
+	/// <summary>
 	/// Driving distance from <paramref name="_From"/> to <paramref name="_To"/>, following lanes in their legal
-	/// direction. False when either end isn't near a road, or when no route exists at all — a one-way system can
-	/// genuinely have no way round.
+	/// direction. False when neither end is anywhere near a road, or when no route exists at all — a one-way
+	/// system can genuinely have no way round.
 	///
-	/// Dijkstra over whole lanes rather than individual waypoints: lanes are the unit the graph is linked in, and
-	/// a city's worth of them is a few thousand nodes, which is nothing. The partial lengths at each end are
-	/// added on afterwards so the answer is measured from the actual points, not from the nearest lane ends.
+	/// Dijkstra over whole lanes rather than individual waypoints: lanes are the unit the graph is linked in,
+	/// and a city's worth of them is a few thousand nodes. Costs are measured to the START of each lane, with
+	/// the partial lengths at both ends added on, so the answer is measured between the actual points.
 	/// </summary>
 	public bool TryGetDrivingDistance(Vector3 _From, Vector3 _To, out float _Distance)
 	{
 		_Distance = 0.0f;
 
-		TrafficLane start = FindNearestLane(_From, out int startIndex);
-		TrafficLane goal = FindNearestLane(_To, out int goalIndex);
+		List<(TrafficLane Lane, int Index)> starts = FindNearbyLanes(_From);
+		List<(TrafficLane Lane, int Index)> goals = FindNearbyLanes(_To);
 
-		if (start is null || goal is null)
+		if (starts.Count == 0 || goals.Count == 0)
 			return false;
 
-		// Same lane: just walk between the two waypoints. Only meaningful forwards — a lane is one-way, so a
-		// goal BEHIND the start really does mean driving off and coming back round, which the search below
-		// would find. Falling through to it is the honest answer.
-		if (start == goal && goalIndex >= startIndex)
-		{
-			_Distance = start.DistanceFromStart(goalIndex) - start.DistanceFromStart(startIndex);
+		var goalIndices = new Dictionary<TrafficLane, int>();
 
-			return true;
-		}
+		foreach ((TrafficLane lane, int index) in goals)
+			goalIndices[lane] = index;
 
-		// Cost recorded at the END of each lane, so relaxing a successor is a single addition of its length.
 		var best = new Dictionary<TrafficLane, float>();
 		var queue = new PriorityQueue<TrafficLane, float>();
 
-		float startCost = start.DistanceToEnd(startIndex);
+		float bestTotal = float.MaxValue;
 
-		best[start] = startCost;
-		queue.Enqueue(start, startCost);
+		foreach ((TrafficLane lane, int index) in starts)
+		{
+			// Goal on the same lane and ahead of us: straight down the road, no junction involved. Behind us
+			// doesn't count — a lane is one-way, so that really does mean driving round and coming back, which
+			// the search below works out properly.
+			if (goalIndices.TryGetValue(lane, out int goalIndex) && goalIndex >= index)
+				bestTotal = Math.Min(bestTotal, lane.DistanceFromStart(goalIndex) - lane.DistanceFromStart(index));
+
+			// We start partway along, so what's reachable is the successors, at the cost of finishing this lane.
+			float toEnd = lane.DistanceToEnd(index);
+
+			foreach (TrafficLane next in lane.Successors)
+				Relax(next, toEnd, best, queue);
+		}
 
 		while (queue.TryDequeue(out TrafficLane lane, out float cost))
 		{
-			// A stale entry from before we found a cheaper way here.
+			// Min-ordered, so once the cheapest thing left already costs more than an answer we have, nothing
+			// better can come out of it.
+			if (cost >= bestTotal)
+				break;
+
 			if (best.TryGetValue(lane, out float known) && cost > known)
 				continue;
 
-			if (lane == goal)
-			{
-				// cost is to the END of the goal lane; we want a point partway along it.
-				_Distance = Math.Max(0.0f, cost - lane.Length + lane.DistanceFromStart(goalIndex));
+			// Reaching a goal lane doesn't end the search: another route might arrive at a different goal
+			// candidate — the other side of the same street, say — for less.
+			if (goalIndices.TryGetValue(lane, out int goalIndex))
+				bestTotal = Math.Min(bestTotal, cost + lane.DistanceFromStart(goalIndex));
 
-				return true;
-			}
+			float exit = cost + lane.Length;
 
 			foreach (TrafficLane next in lane.Successors)
-			{
-				float nextCost = cost + next.Length;
-
-				if (best.TryGetValue(next, out float existing) && existing <= nextCost)
-					continue;
-
-				best[next] = nextCost;
-
-				queue.Enqueue(next, nextCost);
-			}
+				Relax(next, exit, best, queue);
 		}
 
-		return false;
+		if (bestTotal >= float.MaxValue)
+			return false;
+
+		_Distance = Math.Max(0.0f, bestTotal);
+
+		return true;
+	}
+
+
+
+	private static void Relax(TrafficLane _Lane, float _Cost, Dictionary<TrafficLane, float> _Best, PriorityQueue<TrafficLane, float> _Queue)
+	{
+		if (_Best.TryGetValue(_Lane, out float existing) && existing <= _Cost)
+			return;
+
+		_Best[_Lane] = _Cost;
+
+		_Queue.Enqueue(_Lane, _Cost);
 	}
 
 
 
 	/// <summary>
-	/// The drivable lane whose nearest waypoint is closest to <paramref name="_Point"/>, and which waypoint that
-	/// was. Road lanes only — snapping a pickup onto an intersection cross-lane would measure the route from the
-	/// middle of a junction.
+	/// Every drivable lane with a waypoint within <paramref name="_Radius"/> of the point, and which waypoint
+	/// that was — at most one entry per lane.
+	///
+	/// Taking ALL of them, rather than just the closest, is what makes routing reliable. A road carries a lane
+	/// per direction, so any point on it is near at least two; picking only the nearest is a coin flip that can
+	/// land on the one pointing away from where you're going, or on one nothing feeds into. The route then comes
+	/// back as impossible even though the lane a few metres over is trivially routable. Seeding the search with
+	/// every candidate — and accepting any of them at the far end — also gets the natural answer for free:
+	/// either side of the street will do, whichever is closer to drive.
+	///
+	/// Road lanes only. Snapping an endpoint onto an intersection cross-lane would measure from the middle of
+	/// a junction.
+	/// </summary>
+	public List<(TrafficLane Lane, int Index)> FindNearbyLanes(Vector3 _Point, float _Radius = DefaultRouteSnapRadius)
+	{
+		var results = new List<(TrafficLane, int)>();
+
+		TrafficLane nearestLane = null;
+		int nearestIndex = 0;
+		float nearestDistance = float.MaxValue;
+
+		float radiusSquared = _Radius * _Radius;
+
+		foreach (TrafficLane lane in Lanes)
+		{
+			if (!lane.IsRoadLane)
+				continue;
+
+			int laneIndex = -1;
+			float laneDistance = float.MaxValue;
+
+			for (int i = 0; i < lane.Waypoints.Count; i++)
+			{
+				float distance = lane.Waypoints[i].DistanceSquared(_Point);
+
+				if (distance >= laneDistance)
+					continue;
+
+				laneDistance = distance;
+				laneIndex = i;
+			}
+
+			if (laneIndex < 0)
+				continue;
+
+			if (laneDistance < nearestDistance)
+			{
+				nearestDistance = laneDistance;
+				nearestLane = lane;
+				nearestIndex = laneIndex;
+			}
+
+			if (laneDistance <= radiusSquared)
+				results.Add((lane, laneIndex));
+		}
+
+		// Off-road entirely (a car park, a field) — the closest lane is still the honest answer, so don't come
+		// back empty and turn a long route into "no route".
+		if (results.Count == 0 && nearestLane is not null)
+			results.Add((nearestLane, nearestIndex));
+
+		return results;
+	}
+
+
+
+	/// <summary>
+	/// The single drivable lane closest to a point, and which waypoint that was. Prefer
+	/// <see cref="FindNearbyLanes"/> for routing — one lane is rarely the whole answer for a two-way road.
 	/// </summary>
 	public TrafficLane FindNearestLane(Vector3 _Point, out int _Index)
 	{

@@ -58,7 +58,7 @@ public sealed class ParkingSystem : Component
 	
 	protected override void OnEnabled()
 	{
-		if (IsProxy || Vehicles?.Prefabs == null || Vehicles.Prefabs.Length == 0)
+		if (IsProxy || !Vehicles.IsValid() || !Vehicles.HasVehicles)
 			return;
 
 		int chance = Random.Shared.Next(0, 100);
@@ -253,8 +253,11 @@ public sealed class ParkingSystem : Component
 	private void SpawnVehicle()
 	{
 		Angles angles = CalculateSpawnAngles();
-		GameObject vehiclePrefab = GetRandomVehiclePrefab();
-		
+		GameObject vehiclePrefab = Vehicles.PickRandomPrefab();
+
+		if (!vehiclePrefab.IsValid())
+			return;
+
 		GameObject vehicle = vehiclePrefab.Clone(WorldPosition, angles);
 
 		RoadManager.OnBeforeParkedVehicleSpawn?.Invoke(vehicle);
@@ -267,7 +270,8 @@ public sealed class ParkingSystem : Component
 		
 		if (renderer.IsValid())
 		{
-			// Give it a cool random tint
+			// Give it a cool random tint (If the vehicle doesn't have the tag 'notint', add this special tag if you don't want the color of the vehicle to be randomly chosen at spawn)
+			if (!vehicle.Tags.Has("notint"))
 			{
 				renderer.Tint = new Color(Game.Random.NextSingle(), Game.Random.NextSingle(), Game.Random.NextSingle(), renderer.Tint.a);
 			
@@ -305,14 +309,5 @@ public sealed class ParkingSystem : Component
 		}
 		
 		return angles;
-	}
-	
-	
-	
-	private GameObject GetRandomVehiclePrefab()
-	{
-		int index = Random.Shared.Next(0, Vehicles.Prefabs.Length);
-		
-		return Vehicles.Prefabs[index];
 	}
 }
