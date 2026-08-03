@@ -81,19 +81,19 @@ public sealed class EntityFade : Component
 		_ = AsyncFadeOut();
 	}
 	
-	[Rpc.Broadcast(NetFlags.HostOnly)]
+	[Rpc.Broadcast]
 	public void FadeInBroadcasted()
 	{
 		_ = AsyncFadeIn();
 	}
 	
-	[Rpc.Broadcast(NetFlags.HostOnly)]
+	[Rpc.Broadcast]
 	public void FadeOutBroadcasted()
 	{
 		_ = AsyncFadeOut();
 	}
 	
-	[Rpc.Broadcast(NetFlags.HostOnly)]
+	[Rpc.Broadcast]
 	public void FadeOutAndDestroyBroadcasted()
 	{
 		_ = AsyncFadeOutAndDestroy();

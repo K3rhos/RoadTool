@@ -67,6 +67,15 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 	public static Action<GameObject> OnBeforeParkedVehicleSpawn { get; set; }
 
 	/// <summary>
+	/// Raised on the host for each traffic vehicle once it's spawned, networked and wired to its lane.
+	///
+	/// The seam for whatever a GAME wants on its traffic that the tool has no business knowing about — a
+	/// driver sat in the seat, a livery, a siren, a delivery load. AFTER setup rather than before, so the
+	/// object is already network-spawned and its seats exist: anything parented here replicates normally.
+	/// </summary>
+	public static Action<GameObject> OnTrafficVehicleSpawned { get; set; }
+
+	/// <summary>
 	/// The lane graph: every road and intersection lane in the scene, with its waypoints, width, speed limit and
 	/// connections. Built on demand, so it's safe to ask for at any point in the frame.
 	///
@@ -638,8 +647,10 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 		}
 
 		Network.Refresh(renderer);
-		
+
 		m_Vehicles.Add(vehicle);
+
+		OnTrafficVehicleSpawned?.Invoke(clone);
 	}
 	
 	
