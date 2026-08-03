@@ -1,0 +1,9 @@
+{
+  "Prefab": {
+    "_type": "gameobject",
+    "prefab": "thirdparty/comrade1280/prefabs/coupe.prefab"
+  },
+  "Probability": 0.75,
+  "__references": [],
+  "__version": 0
+}

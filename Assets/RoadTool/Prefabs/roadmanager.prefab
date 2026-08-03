@@ -3,7 +3,7 @@
     "__guid": "040a01d8-60b8-4489-8a03-fb2334189b14",
     "__version": 2,
     "Flags": 0,
-    "Name": "RoadManager",
+    "Name": "roadmanager",
     "Position": "0,0,0",
     "Rotation": "0,0,0,1",
     "Scale": "1,1,1",
@@ -39,16 +39,38 @@
         "SpawnGap": 250,
         "SpawnHeightOffset": 0,
         "StopMargin": 150,
+        "TrafficClustering": 0,
         "TrafficDensity": 0.15,
         "TrafficDespawnDistance": 7000,
         "TrafficSpawnDistance": 5000,
         "TrafficSpawnMinDistance": 3000,
-        "VehicleSet": "roadtool/resources/groundvehicles.vset",
+        "VehicleSet": "roadtool/resources/landvehicles_all.vset",
         "VehicleSpacing": 180,
         "WaypointSpacing": 150
       }
     ],
-    "Children": []
+    "Children": [],
+    "__properties": {
+      "NetworkInterpolation": true,
+      "TimeScale": 1,
+      "WantsSystemScene": true,
+      "Metadata": {},
+      "NavMesh": {
+        "Enabled": false,
+        "IncludeStaticBodies": true,
+        "IncludeKeyframedBodies": true,
+        "EditorAutoUpdate": false,
+        "AgentHeight": 64,
+        "AgentRadius": 16,
+        "AgentStepSize": 18,
+        "AgentMaxSlope": 40,
+        "ExcludedBodies": "",
+        "IncludedBodies": "",
+        "DeferGeneration": false,
+        "CustomBounds": false
+      }
+    },
+    "__variables": []
   },
   "ResourceVersion": 2,
   "ShowInMenu": false,
