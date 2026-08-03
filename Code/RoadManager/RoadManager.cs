@@ -493,9 +493,25 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 				{
 					Vector3 ua = lane.UTurnArc[i] + offset;
 					Vector3 ub = lane.UTurnArc[i + 1] + offset;
-					
+
 					DebugOverlay.Line(ua, ub, color);
 				}
+			}
+		}
+
+		// Pavements, in yellow. No direction arrow: a sidewalk lane is a line to stand on and walk along, not a
+		// one-way route, so unlike a traffic lane it has no travel direction to point at.
+		foreach (var lane in m_Graph.SidewalkLanes)
+		{
+			if (lane.Waypoints.Count < 2)
+				continue;
+
+			for (int i = 0; i < lane.Waypoints.Count - 1; i++)
+			{
+				Vector3 a = lane.Waypoints[i] + offset;
+				Vector3 b = lane.Waypoints[i + 1] + offset;
+
+				DebugOverlay.Line(a, b, Color.Yellow);
 			}
 		}
 	}
@@ -675,6 +691,23 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 					Vector3 ub = WorldTransform.PointToLocal(lane.UTurnArc[i + 1]);
 					Gizmo.Draw.Line(ua, ub);
 				}
+			}
+		}
+
+		// Pavements, in yellow. No direction arrow: a sidewalk lane is a line to stand on and walk along, not a
+		// one-way route, so unlike a traffic lane it has no travel direction to point at.
+		Gizmo.Draw.Color = Color.Yellow;
+
+		foreach (var lane in m_Graph.SidewalkLanes)
+		{
+			if (lane.Waypoints.Count < 2)
+				continue;
+
+			for (int i = 0; i < lane.Waypoints.Count - 1; i++)
+			{
+				Vector3 a = WorldTransform.PointToLocal(lane.Waypoints[i]);
+				Vector3 b = WorldTransform.PointToLocal(lane.Waypoints[i + 1]);
+				Gizmo.Draw.Line(a, b);
 			}
 		}
 
