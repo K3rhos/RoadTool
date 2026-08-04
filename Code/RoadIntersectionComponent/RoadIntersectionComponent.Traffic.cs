@@ -14,6 +14,9 @@ public partial class RoadIntersectionComponent
 	{
 		public Transform Transform { get; init; }
 		public float RoadWidth { get; init; }
+
+		/// <summary>Pedestrians get no crossing over this arm's mouth. Vehicles are unaffected.</summary>
+		public bool NoCrossing { get; init; }
 	}
 
 	/// <summary>
@@ -47,7 +50,8 @@ public partial class RoadIntersectionComponent
 				exits.Add(new TrafficExit
 				{
 					Transform = GetRectangleExitTransform(exit.Side, true, exit.Offset),
-					RoadWidth = exit.Width
+					RoadWidth = exit.Width,
+					NoCrossing = exit.NoCrossing
 				});
 			}
 		}
@@ -60,7 +64,8 @@ public partial class RoadIntersectionComponent
 				exits.Add(new TrafficExit
 				{
 					Transform = GetCircleExitTransform(i, true),
-					RoadWidth = circleExits[i].RoadWidth
+					RoadWidth = circleExits[i].RoadWidth,
+					NoCrossing = circleExits[i].NoCrossing
 				});
 			}
 		}

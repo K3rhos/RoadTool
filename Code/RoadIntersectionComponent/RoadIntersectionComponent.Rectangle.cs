@@ -23,6 +23,15 @@ public class RectangleExitDef
 	[Property(Title = "Side")] public RectangleExit Side { get; set { field = value; Reference?.m_IsDirty = true; } } = RectangleExit.North;
 	[Property(Title = "Offset")] public float Offset { get; set { field = value; Reference?.m_IsDirty = true; } } = 0.0f;
 	[Property(Title = "Width")] public float Width { get; set { field = value; Reference?.m_IsDirty = true; } } = 500.0f;
+
+	/// <summary>
+	/// No pedestrian crossing over THIS arm's mouth. The pavement still runs round the junction and still joins
+	/// the road here — there's just nothing leading off the kerb into the carriageway.
+	///
+	/// Per-arm because it's a per-arm question: a junction where a slip road meets a dual carriageway wants a
+	/// crossing over the slip road and none over the carriageway. Doesn't touch the mesh, so no rebuild.
+	/// </summary>
+	[Property(Title = "No Crossing")] public bool NoCrossing { get; set; } = false;
 }
 
 public partial class RoadIntersectionComponent

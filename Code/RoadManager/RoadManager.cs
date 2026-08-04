@@ -11,7 +11,7 @@ namespace RedSnail.RoadTool;
 /// In play mode it spawns vehicle-prefab instances that drive the network; in the editor it draws the computed layout.
 /// </summary>
 [Icon("directions_car")]
-public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotloadManaged
+public sealed partial class RoadManager : Component, Component.ExecuteInEditor, IHotloadManaged
 {
 	private const float TrafficStreamInterval = 0.25f; // seconds between streaming passes (despawn strays, top up near players)
 	private const int MaxSpawnsPerTick = 5;            // cap cars spawned per pass so a fresh area fills in gradually, not in one burst
@@ -151,8 +151,10 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 	protected override void OnDisabled()
 	{
 		RemoveVehicles();
+		RemovePedestrians();
 		m_Graph = null;
 		m_SpawnSlots.Clear();
+		m_PedestrianSlots.Clear();
 	}
 	
 	
@@ -181,6 +183,10 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 			// GTA-style streaming: despawn cars that have drifted away from every player, and spawn new ones at empty
 			// lane slots in a ring around players, up to the density target.
 			StreamTraffic();
+
+			// Same idea on the pavements. Separate pass on its own interval — people and cars thin out at
+			// different rates, and a street with no traffic should still have someone walking down it.
+			StreamPedestrians();
 
 			// Debug
 			DrawLayoutDebugOverlay();
@@ -508,19 +514,34 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 			}
 		}
 
-		// Pavements, in yellow. No direction arrow: a sidewalk lane is a line to stand on and walk along, not a
-		// one-way route, so unlike a traffic lane it has no travel direction to point at.
+		// Joins and dead ends first, so a link can never sit on top of a lane and hide what colour it is.
+
+		// Where pavement lanes actually JOIN, in magenta. A visible gap between two yellow lines says nothing
+		// on its own — routing only cares whether they're linked, and a short magenta bridge across a gap
+		// means they are. No magenta where two lines nearly touch is the real fault.
+		foreach (var (from, to) in m_Graph.GetSidewalkLinks())
+			DebugOverlay.Line(from + offset, to + offset, Color.Magenta);
+
+		// And in red, every pavement end that joins onto NOTHING. Red where two pavements meet is the break;
+		// red at the edge of the map is just the edge of the map.
+		foreach (var end in m_Graph.GetSidewalkDeadEnds())
+			DebugOverlay.Sphere(new Sphere(end + offset, 40.0f), Color.Red);
+
+		// Pavements in yellow, crossings in orange. No direction arrows: a pedestrian lane is a line to stand
+		// on and walk along in either direction, so unlike a traffic lane it has no travel direction to show.
 		foreach (var lane in m_Graph.SidewalkLanes)
 		{
 			if (lane.Waypoints.Count < 2)
 				continue;
+
+			Color color = lane.IsCrossing ? new Color(1.0f, 0.6f, 0.1f) : Color.Yellow;
 
 			for (int i = 0; i < lane.Waypoints.Count - 1; i++)
 			{
 				Vector3 a = lane.Waypoints[i] + offset;
 				Vector3 b = lane.Waypoints[i + 1] + offset;
 
-				DebugOverlay.Line(a, b, Color.Yellow);
+				DebugOverlay.Line(a, b, color);
 			}
 		}
 	}
@@ -538,7 +559,9 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 		{
 			// Drop the current fleet; streaming re-populates it on the fresh graph next pass (around any nearby player).
 			RemoveVehicles();
+			RemovePedestrians();
 			m_TrafficStreamCooldown = 0.0f;
+			m_PedestrianStreamCooldown = 0.0f;
 		}
 
 		m_IsDirty = false;
@@ -546,8 +569,14 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 		int roads = m_Graph?.RoadCount ?? 0;
 		int intersections = m_Graph?.IntersectionCount ?? 0;
 		int lanes = m_Graph?.Lanes.Count ?? 0;
+		int pavements = m_Graph?.SidewalkLanes.Count ?? 0;
+		int links = m_Graph?.SidewalkLinkCount ?? 0;
+		int deadEnds = m_Graph?.GetSidewalkDeadEnds().Count() ?? 0;
 
-		SandboxUtility.ShowEditorNotification($"Traffic layout rebuilt — {roads} roads, {intersections} intersections, {lanes} lanes");
+		// Pavement segments AND joins AND dead ends: a big segment count with no joins is a pile of unconnected
+		// pieces, which looks identical to a working network until something tries to walk it.
+		SandboxUtility.ShowEditorNotification(
+			$"Traffic layout rebuilt — {roads} roads, {intersections} intersections, {lanes} lanes, {pavements} pavements ({links} joins, {deadEnds} dead ends)");
 	}
 
 
@@ -556,6 +585,7 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 	{
 		m_Graph = RoadTrafficGraph.Build(Scene, Settings);
 		BuildSpawnSlots();
+		BuildPedestrianSlots();
 	}
 
 
@@ -705,14 +735,40 @@ public sealed class RoadManager : Component, Component.ExecuteInEditor, IHotload
 			}
 		}
 
-		// Pavements, in yellow. No direction arrow: a sidewalk lane is a line to stand on and walk along, not a
-		// one-way route, so unlike a traffic lane it has no travel direction to point at.
-		Gizmo.Draw.Color = Color.Yellow;
+		// Joins and dead ends go UNDERNEATH the lanes, so a link can never sit on top of a lane and hide what
+		// colour it is. That mistake costs an afternoon: a magenta line lying exactly along a crossing reads as
+		// a crossing that was never generated.
 
+		// Where pavement lanes actually JOIN, in magenta. A visible gap between two yellow lines says nothing
+		// on its own — routing only cares whether they're linked, and a magenta bridge across a gap means they
+		// are. No magenta where two lines nearly touch is the real fault. The ring is there because a perfect
+		// join is a zero-length line: invisible, and indistinguishable from no join at all.
+		Gizmo.Draw.Color = Color.Magenta;
+
+		foreach (var (from, to) in m_Graph.GetSidewalkLinks())
+		{
+			Vector3 a = WorldTransform.PointToLocal(from);
+			Vector3 b = WorldTransform.PointToLocal(to);
+
+			Gizmo.Draw.Line(a, b);
+			Gizmo.Draw.LineCircle((a + b) * 0.5f, Vector3.Up, 24.0f);
+		}
+
+		// And in red, every pavement end that joins onto NOTHING. Red where two pavements meet is the break;
+		// red at the edge of the map is just the edge of the map.
+		Gizmo.Draw.Color = Color.Red;
+
+		foreach (var end in m_Graph.GetSidewalkDeadEnds())
+			Gizmo.Draw.LineCircle(WorldTransform.PointToLocal(end), Vector3.Up, 40.0f);
+
+		// Pavements in yellow, crossings in orange. No direction arrows: a pedestrian lane is a line to stand
+		// on and walk along in either direction, so unlike a traffic lane it has no travel direction to show.
 		foreach (var lane in m_Graph.SidewalkLanes)
 		{
 			if (lane.Waypoints.Count < 2)
 				continue;
+
+			Gizmo.Draw.Color = lane.IsCrossing ? new Color(1.0f, 0.6f, 0.1f) : Color.Yellow;
 
 			for (int i = 0; i < lane.Waypoints.Count - 1; i++)
 			{

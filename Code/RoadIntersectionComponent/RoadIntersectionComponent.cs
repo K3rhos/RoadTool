@@ -34,8 +34,8 @@ public partial class RoadIntersectionComponent : Component, Component.ExecuteInE
 	[Property(Title = "Texture Repeat"), Feature("General"), Order(0)] private float RoadTextureRepeat { get; set { field = value; m_IsDirty = true; } } = 500.0f;
 	
 	[Property(Title = "Material"), Feature("General"), Category("Sidewalk"), Order(3)] private Material SidewalkMaterial { get; set { field = value; m_IsDirty = true; } }
-	[Property(Title = "Width"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkWidth { get; set { field = value; m_IsDirty = true; } } = 150.0f;
-	[Property(Title = "Height"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkHeight { get; set { field = value; m_IsDirty = true; } } = 5.0f;
+	[Property(Title = "Width"), Feature("General"), Category("Sidewalk"), Order(3)] public float SidewalkWidth { get; set { field = value; m_IsDirty = true; } } = 150.0f;
+	[Property(Title = "Height"), Feature("General"), Category("Sidewalk"), Order(3)] public float SidewalkHeight { get; set { field = value; m_IsDirty = true; } } = 5.0f;
 	[Property(Title = "Inner Bevel"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkBevel { get; set { field = value; m_IsDirty = true; } } = 0.0f;
 	[Property(Title = "Texture Repeat"), Feature("General"), Category("Sidewalk"), Order(3)] private float SidewalkTextureRepeat { get; set { field = value; m_IsDirty = true; } } = 200.0f;
 

@@ -9,6 +9,12 @@ public class CircleExit
 	[Property, Hide] public RoadIntersectionComponent Reference { get; set; }
 	[Property] public float AngleDegrees { get; set { field = value; Reference?.m_IsDirty = true; } } = 0.0f;
 	[Property] public float RoadWidth { get; set { field = value;  Reference?.m_IsDirty = true; } } = 500.0f;
+
+	/// <summary>
+	/// No pedestrian crossing over THIS arm's mouth. The pavement still runs round the junction and still joins
+	/// the road here — there's just nothing leading off the kerb into the carriageway. Doesn't touch the mesh.
+	/// </summary>
+	[Property(Title = "No Crossing")] public bool NoCrossing { get; set; } = false;
 }
 
 public partial class RoadIntersectionComponent

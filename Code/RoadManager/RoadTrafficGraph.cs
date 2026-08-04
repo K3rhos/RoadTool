@@ -38,6 +38,15 @@ public sealed class TrafficLane
 	/// <summary>True for road lanes, false for intersection cross-lanes (spawn preference + gizmo color).</summary>
 	public bool IsRoadLane;
 
+	/// <summary>
+	/// Sidewalk lanes only: this one goes OVER a road rather than along a pavement.
+	///
+	/// Worth telling apart because it's the only stretch of the pedestrian network where you're in traffic.
+	/// Anything picking a spot for someone to stand or wait should skip these; anything routing across the
+	/// map needs them, or the two sides of a street are separate worlds.
+	/// </summary>
+	public bool IsCrossing;
+
 	/// <summary>Width of this lane — used to size the endpoint-matching tolerance so neighbouring lanes don't cross-link.</summary>
 	public float LaneWidth = 100.0f;
 
@@ -149,14 +158,16 @@ public sealed partial class RoadTrafficGraph
 	public readonly List<TrafficLane> Lanes = new();
 
 	/// <summary>
-	/// Walkable pavement lanes — one down the middle of each sidewalk, on both sides of every road that has them.
-	/// Traced from the sidewalk mesh's own geometry, so a waypoint is a place a pedestrian genuinely stands.
+	/// The pedestrian network: pavement down both sides of every road, arcs round every intersection corner,
+	/// and a crossing over the mouth of each junction arm. Traced from the sidewalk mesh's own geometry, so a
+	/// waypoint is a place a pedestrian genuinely stands.
 	///
 	/// Deliberately NOT in <see cref="Lanes"/>: everything that reads that list is looking for somewhere to
 	/// drive, and quietly handing it pavements would put traffic on them. Same <see cref="TrafficLane"/> type
-	/// though, so pedestrian routing gets the successor/conflict machinery for free if it's ever wanted.
+	/// though, so pedestrians get the same waypoint and successor machinery vehicles already use.
 	///
-	/// Roads only for now — intersection corners aren't traced, so pavement lanes stop short at junctions.
+	/// <see cref="TrafficLane.Successors"/> is populated in BOTH directions here, unlike the one-way vehicle
+	/// lanes — see RoadTrafficGraph.Sidewalks.cs.
 	/// </summary>
 	public readonly List<TrafficLane> SidewalkLanes = new();
 
@@ -177,6 +188,8 @@ public sealed partial class RoadTrafficGraph
 		graph.AddRoads(_Scene, _Settings);
 		graph.AddIntersections(_Scene, _Settings);
 		graph.AddSidewalks(_Scene, _Settings);
+		graph.AddIntersectionSidewalks(_Scene, _Settings);
+		graph.LinkSidewalks(_Settings);
 		graph.ComputeSuccessors();
 		graph.ApplyDeadEndUTurns();
 
@@ -185,46 +198,6 @@ public sealed partial class RoadTrafficGraph
 
 
 
-	// ── Roads → one walkable lane down each pavement ──────────────────────────────────────────────────────────
-	private void AddSidewalks(Scene _Scene, RoadTrafficSettings _Settings)
-	{
-		var left = new List<Vector3>();
-		var right = new List<Vector3>();
-
-		foreach (var road in _Scene.GetAll<RoadComponent>())
-		{
-			if (!road.IsValid() || !road.Active || !road.HasSidewalk)
-				continue;
-
-			// ExcludeTraffic is deliberately NOT checked: a pedestrianised street has no cars on it and the
-			// most pavement.
-			road.GetSidewalkCenterlines(_Settings.WaypointSpacing, left, right);
-
-			if (left.Count < 2)
-				continue;
-
-			AddSidewalkLane(road, left);
-			AddSidewalkLane(road, right);
-		}
-	}
-
-
-
-	private void AddSidewalkLane(RoadComponent _Road, List<Vector3> _Points)
-	{
-		var lane = new TrafficLane
-		{
-			Owner = _Road,
-			IsRoadLane = false,
-			LaneWidth = _Road.SidewalkWidth,
-			RoadHalfWidth = _Road.RoadWidth * 0.5f,
-			SpeedLimit = 0.0f
-		};
-
-		lane.Waypoints.AddRange(_Points);
-
-		SidewalkLanes.Add(lane);
-	}
 
 
 
