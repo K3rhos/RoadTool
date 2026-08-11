@@ -7,7 +7,7 @@ namespace RedSnail.RoadTool.Editor;
 
 public partial class RoadToolWindow : WidgetWindow
 {
-	private RoadComponent _targetComponent;
+	private ISplineComponent _targetComponent;
 	private static bool _isClosed;
 
 	private ControlWidget _inTangentControl;
@@ -54,7 +54,7 @@ public partial class RoadToolWindow : WidgetWindow
 
 
 
-	public void OnSelectionChanged(RoadComponent _Spline)
+	public void OnSelectionChanged(ISplineComponent _Spline)
 	{
 		_targetComponent = _Spline;
 

@@ -97,6 +97,12 @@ public partial class RoadToolWindow
 
 	private void DrawPositionGizmo()
 	{
+		// The first point sits on the component origin, so its move handle lands right on top of the GameObject's
+		// own transform gizmo — two move gizmos fighting over the same spot. Hide the point-body handle there and
+		// let the object transform gizmo move the whole track instead. Tangent editing still gets its own gizmo.
+		if (SelectedPointIndex == 0 && !_inTangentSelected && !_outTangentSelected)
+			return;
+
 		var gizmoPosition = CalculateGizmoPosition();
 
 		if (!Gizmo.IsShiftPressed)
@@ -130,7 +136,7 @@ public partial class RoadToolWindow
 	{
 		_moveInProgress = false;
 
-		if (Gizmo.Control.Position("spline_control_", Vector3.Zero, out var delta))
+		if (Gizmo.Control.Position("spline_control_", Vector3.Zero, out var delta, GetHandleRotation()))
 		{
 			_moveInProgress = true;
 			_movementUndoScope ??= CreateUndoScope("Moved spline point");
@@ -148,6 +154,36 @@ public partial class RoadToolWindow
 			_movementUndoScope?.Dispose();
 			_movementUndoScope = null;
 		}
+	}
+
+
+
+	/// <summary>
+	/// Orientation for the move gizmo's arrows, honouring the editor's Global/Local space toggle
+	/// (the same <see cref="Gizmo.Settings.GlobalSpace"/> button the object move tool uses).
+	/// Global keeps the arrows world-aligned; Local aligns them to the selected point's tangent frame
+	/// so a point can be dragged straight along the track. We are already inside the component-transform
+	/// scope, so returning the point's <em>local</em> frame is what places the arrows on the world tangent —
+	/// and <see cref="Gizmo.Control.Position"/> hands the delta back in component-local space, matching how
+	/// <see cref="MoveSelectedPoint"/> applies it.
+	/// </summary>
+	private Rotation GetHandleRotation()
+	{
+		if (Gizmo.Settings.GlobalSpace)
+			return Rotation.Identity;
+
+		if (!IsSelectedPointValid())
+			return Rotation.Identity;
+
+		var spline = _targetComponent.Spline;
+		var sample = spline.SampleAtDistance(spline.GetDistanceAtPoint(SelectedPointIndex));
+
+		if (sample.Tangent.IsNearlyZero())
+			return Rotation.Identity;
+
+		var up = Rotation.FromAxis(sample.Tangent, sample.Roll) * sample.Up;
+
+		return Rotation.LookAt(sample.Tangent, up);
 	}
 
 

@@ -1,5 +1,6 @@
 using System;
 using Editor;
+using Sandbox;
 
 namespace RedSnail.RoadTool.Editor;
 
@@ -39,6 +40,6 @@ public partial class RoadToolWindow
 
 	private IDisposable CreateUndoScope(string _Name)
 	{
-		return SceneEditorSession.Active.UndoScope(_Name).WithComponentChanges(_targetComponent).Push();
+		return SceneEditorSession.Active.UndoScope(_Name).WithComponentChanges(_targetComponent as Component).Push();
 	}
 }

@@ -7,7 +7,7 @@ namespace RedSnail.RoadTool;
 /// Represents a road component that can be manipulated within the editor and at runtime.
 /// </summary>
 [Icon("signpost")]
-public partial class RoadComponent : Component, Component.ExecuteInEditor, Component.IHasBounds
+public partial class RoadComponent : Component, Component.ExecuteInEditor, Component.IHasBounds, ISplineComponent
 {
 	/// <summary>
 	/// Undo/redo and prefab reloads deserialize a brand new <see cref="Sandbox.Spline"/> into this component

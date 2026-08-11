@@ -327,7 +327,9 @@ public sealed partial class RoadManager : Component, Component.ExecuteInEditor, 
 				continue;
 			}
 
-			if (vehicle.GameObject.Tags.Has("last_vehicle"))
+			// The car the player last drove, or one a game has claimed for something of its own — a pursuit, a
+			// mission convoy. Both stay; only their owner decides when they're finished with.
+			if (vehicle.GameObject.Tags.Has("last_vehicle") || vehicle.GameObject.Tags.Has("keep_alive"))
 				continue;
 
 			if (NearestDistanceSq(vehicle.WorldPosition, _Players) > despawnSq)
@@ -619,16 +621,48 @@ public sealed partial class RoadManager : Component, Component.ExecuteInEditor, 
 	// Spawns one networked traffic car at a slot and wires up its brain. Host only (called from the streaming pass).
 	private void SpawnVehicleAt(TrafficLane _Lane, int _Index)
 	{
+		TrafficVehicle vehicle = SpawnTrafficVehicle(VehicleSet.PickRandomPrefab(), _Lane, _Index);
+
+		// Raised HERE rather than inside the spawn, because the event means "the streaming produced a traffic
+		// car" — an anonymous one, for the game to dress. A car the game asked for by name is not that: it
+		// already has the object, and firing this at it would hand its own vehicle back to whatever fills in
+		// traffic. Which, for anything with a driver seat, means a civilian sitting in it before the caller can
+		// put anyone there.
+		if (vehicle.IsValid())
+			OnTrafficVehicleSpawned?.Invoke(vehicle.GameObject);
+	}
+
+
+
+	/// <summary>
+	/// Puts a specific prefab on the road as a fully wired traffic vehicle, driving from a given lane.
+	///
+	/// For a game that needs a car the STREAMING wouldn't have produced — a police pursuit, an ambulance, a
+	/// scripted convoy — but that should drive like everything else. Going through here rather than spawning it
+	/// yourself is what gets the neighbour list, the spacing, the awareness tags and the height offset, all of
+	/// which are the manager's settings rather than the prefab's; a hand-spawned car has none of them and drives
+	/// like it.
+	///
+	/// Point it somewhere with <see cref="TrafficVehicle.Route"/> once you have it. Tag the object
+	/// <c>keep_alive</c> if the game owns its lifetime, or the streaming pass will despawn it by distance along
+	/// with everything else.
+	///
+	/// Deliberately does NOT raise <see cref="OnTrafficVehicleSpawned"/>. That event is for cars the streaming
+	/// produced, which a game dresses on the way past — an anonymous vehicle needing a driver, a livery, a load.
+	/// This one isn't anonymous: you asked for it, you have it, and you decide what goes in it. Firing the event
+	/// would hand your car to whatever populates traffic and put a civilian in the seat before you could.
+	/// </summary>
+	public TrafficVehicle SpawnTrafficVehicle(GameObject _Prefab, TrafficLane _Lane, int _Index)
+	{
+		if (!Networking.IsHost || !_Prefab.IsValid() || _Lane is null || _Index < 0 || _Index >= _Lane.Waypoints.Count)
+			return null;
+
 		Vector3 spawnPos = _Lane.Waypoints[_Index] + Vector3.Up * SpawnHeightOffset;
-		GameObject prefab = VehicleSet.PickRandomPrefab();
 
-		if (!prefab.IsValid())
-			return;
-
-		GameObject clone = prefab.Clone(spawnPos, Rotation.Identity, Vector3.One);
+		GameObject clone = _Prefab.Clone(spawnPos, Rotation.Identity, Vector3.One);
 
 		if (!clone.IsValid())
-			return;
+			return null;
 
 		clone.NetworkSpawn(Connection.Host);
 		clone.Network.SetOrphanedMode(NetworkOrphaned.Host);
@@ -678,9 +712,12 @@ public sealed partial class RoadManager : Component, Component.ExecuteInEditor, 
 
 		Network.Refresh(renderer);
 
+		// Tracked either way, because the list is also what every vehicle uses to see its neighbours — a car
+		// that isn't in it gets driven into by everything else. Whether it's DESPAWNED from here is a separate
+		// question, answered by the keep_alive tag in the streaming pass.
 		m_Vehicles.Add(vehicle);
 
-		OnTrafficVehicleSpawned?.Invoke(clone);
+		return vehicle;
 	}
 	
 	

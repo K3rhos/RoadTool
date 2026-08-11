@@ -54,6 +54,43 @@ public sealed class TrafficVehicle : Component
 	[Property] public float RoadRageDuration { get; set; } = 20.0f;
 
 	/// <summary>
+	/// Lanes to follow in order instead of picking a random turning at each junction. Null (the default) is
+	/// ordinary traffic, which wanders.
+	///
+	/// Set this and the vehicle has somewhere to be — a police pursuit, a delivery, an ambulance. Nothing else
+	/// changes: it steers, corners, brakes, yields at lights and keeps its distance exactly as it did, because
+	/// the only thing a destination alters is which successor it chooses. Build one with
+	/// <see cref="RoadTrafficGraph.TryGetDrivingLaneRoute"/>, and replace it whenever the destination moves.
+	///
+	/// Coming off the route is not an error — it drops back to wandering and rejoins if a later leg turns up.
+	/// </summary>
+	public List<TrafficLane> Route { get; set; }
+
+	/// <summary>
+	/// Multiplies every speed limit this vehicle obeys. 1 drives like traffic; higher is a vehicle with a reason
+	/// to be going faster than the signs allow.
+	///
+	/// Deliberately scales the LIMIT rather than replacing it, so the shape of the road still governs: a car on
+	/// 2x still slows for a tight corner, just less. Cornering and lane-deviation limits are applied after this
+	/// and are not scaled — those are about grip, and a police car has no more of it than anyone else.
+	/// </summary>
+	[Property] public float SpeedMultiplier { get; set { field = value.Clamp(0.1f, 5.0f); } } = 1.0f;
+
+	/// <summary>
+	/// Drives like it has somewhere urgent to be: through red lights, without giving way, and close enough
+	/// behind traffic to push past rather than queue with it.
+	///
+	/// Only the PERMISSION brakes are dropped. The gap to whatever is physically in front still applies, so an
+	/// emergency vehicle doesn't drive through anything — it just stops waiting to be allowed. Turning off the
+	/// gap brake as well wouldn't make it faster anyway; it would make it shunt the car ahead and lose more time
+	/// than the light ever cost it.
+	/// </summary>
+	[Property] public bool Emergency { get; set; } = false;
+
+	/// <summary>How much of the normal following gap an <see cref="Emergency"/> vehicle keeps. Lower tailgates harder.</summary>
+	[Property] public float EmergencyGapScale { get; set { field = value.Clamp(0.1f, 1.0f); } } = 0.35f;
+
+	/// <summary>
 	/// True while this brain is actually driving the car as an NPC: the component is active and no player has taken
 	/// the wheel. This is the single authority for "AI controlled" — the vehicle's controller just mirrors it,
 	/// and other vehicles read it to tell a managed NPC apart from a player's (stolen) car. An on-rails vehicle with
@@ -376,7 +413,7 @@ public sealed class TrafficVehicle : Component
 			return;
 		}
 
-		float segmentSpeed = m_Target <= m_ConnectorEnd ? DefaultSpeed : m_Lane.SpeedLimit;
+		float segmentSpeed = (m_Target <= m_ConnectorEnd ? DefaultSpeed : m_Lane.SpeedLimit) * SpeedMultiplier;
 		m_SpeedScale = ComputeSpeedScale();
 		float desiredSpeed = segmentSpeed * m_SpeedScale;
 
@@ -813,7 +850,12 @@ public sealed class TrafficVehicle : Component
 		// There is deliberately NO in-junction yielding — once a vehicle is engaged it always drives through,
 		// so it can never stop dead in the middle. All conflicts are resolved at the entry line instead.
 		float gapScale = ComputeGapScale(MathF.Min(NearestVehicleAhead(), m_EntityAhead));
-		float scale = MathF.Min(gapScale, IntersectionApproachScale());
+
+		// Emergency traffic keeps the gap brake and drops the permission one. IntersectionApproachScale IS the
+		// red light and the give-way — skipping it is the whole behaviour, and the gap brake left in place is
+		// what stops "doesn't wait" turning into "drives through the car in front".
+		float scale = Emergency ? gapScale : MathF.Min(gapScale, IntersectionApproachScale());
+
 		return MathF.Min(scale, UTurnApproachScale());
 	}
 
@@ -824,12 +866,15 @@ public sealed class TrafficVehicle : Component
 		if (_Nearest == float.MaxValue)
 			return 1.0f;
 
-		float stopGap = Spacing * 0.45f;
+		// An emergency vehicle sits much closer before it starts easing off, so it noses through moving traffic
+		// rather than settling into the queue two car lengths back.
+		float spacing = Emergency ? Spacing * EmergencyGapScale : Spacing;
+		float stopGap = spacing * 0.45f;
 
 		if (_Nearest <= stopGap)
 			return 0.0f;
 
-		return ((_Nearest - stopGap) / (Spacing - stopGap)).Clamp(0.0f, 1.0f);
+		return ((_Nearest - stopGap) / (spacing - stopGap)).Clamp(0.0f, 1.0f);
 	}
 
 
@@ -1319,7 +1364,46 @@ public sealed class TrafficVehicle : Component
 		if (successors.Count == 0)
 			return null;
 
+		// Following a route: take the lane it says to, if that's somewhere we can actually go from here. This is
+		// the ONLY difference between wandering traffic and a vehicle with somewhere to be — everything about
+		// how it steers, corners, brakes and yields is identical, which is the point of putting it here rather
+		// than writing a second driver.
+		if (TryGetRoutedSuccessor(_Lane, out TrafficLane routed))
+			return routed;
+
 		return successors[m_Rng.Next(successors.Count)];
+	}
+
+
+
+	/// <summary>
+	/// The next lane along <see cref="Route"/>, if we're on the route and it leads somewhere reachable.
+	///
+	/// Found by looking up where we are rather than by keeping an index, because a vehicle does not reliably
+	/// stay on its route — it gets shunted, it takes a random successor when the route runs out, it starts the
+	/// route partway along. Re-locating each time means going off-route degrades into ordinary wandering and
+	/// then silently resumes if a later leg is rejoined, instead of following a stale index off a cliff.
+	/// </summary>
+	private bool TryGetRoutedSuccessor(TrafficLane _Lane, out TrafficLane _Next)
+	{
+		_Next = null;
+
+		if (Route is null || Route.Count < 2)
+			return false;
+
+		int index = Route.IndexOf(_Lane);
+
+		if (index < 0 || index >= Route.Count - 1)
+			return false;
+
+		TrafficLane next = Route[index + 1];
+
+		if (!_Lane.Successors.Contains(next))
+			return false;
+
+		_Next = next;
+
+		return true;
 	}
 
 
