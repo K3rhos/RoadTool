@@ -3,6 +3,16 @@ using Sandbox;
 
 namespace RedSnail.RoadTool;
 
+/// <summary>How a road's sidewalks are shaped.</summary>
+public enum SidewalkStyle
+{
+	/// <summary>Classic raised kerb slab (the original sidewalk).</summary>
+	City,
+
+	/// <summary>A road-material shoulder that steps down to an undulating slope which merges into the terrain.</summary>
+	CountrySide,
+}
+
 public partial class RoadComponent
 {
 	/// <summary>
@@ -11,11 +21,20 @@ public partial class RoadComponent
 	/// </summary>
 	[Property(Title = "🔒 Locked"), Feature("Sidewalk")] private bool IsSidewalkLocked { get; set; } = false;
 	[Property, FeatureEnabled("Sidewalk", Icon = "directions_walk", Tint = EditorTint.Blue)] public bool HasSidewalk { get; set { field = value; IsDirty = true; } } = true;
+	[Property(Title = "Style"), Feature("Sidewalk")] public SidewalkStyle SidewalkStyle { get; set { field = value; IsDirty = true; } } = SidewalkStyle.City;
 	[Property(Title = "Material"), Feature("Sidewalk")] private Material SidewalkMaterial { get; set { field = value; IsDirty = true; } }
 	[Property(Title = "Width"), Feature("Sidewalk"), Range(10.0f, 500.0f)] public float SidewalkWidth { get; set { field = value; IsDirty = true; } } = 150.0f;
-	[Property(Title = "Height"), Feature("Sidewalk"), Range(0.1f, 100.0f)] public float SidewalkHeight { get; set { field = value; IsDirty = true; } } = 5.0f;
-	[Property(Title = "Inner Bevel"), Feature("Sidewalk"), Range(0.0f, 100.0f)] private float SidewalkBevel { get; set { field = value; IsDirty = true; } } = 0.0f;
+	[Property(Title = "Height"), Feature("Sidewalk"), ShowIf(nameof(SidewalkStyle), SidewalkStyle.City), Range(0.1f, 100.0f)] public float SidewalkHeight { get; set { field = value; IsDirty = true; } } = 5.0f;
+	[Property(Title = "Inner Bevel"), Feature("Sidewalk"), ShowIf(nameof(SidewalkStyle), SidewalkStyle.City), Range(0.0f, 100.0f)] private float SidewalkBevel { get; set { field = value; IsDirty = true; } } = 0.0f;
 	[Property(Title = "Texture Repeat"), Feature("Sidewalk")] private float SidewalkTextureRepeat { get; set { field = value.Clamp(1.0f, 100000.0f); IsDirty = true; } } = 200.0f;
+
+	// Country Side style — a road-material shoulder, a small drop, then an undulating slope that falls into the terrain.
+	[Property(Title = "Drop"), Feature("Sidewalk"), ShowIf(nameof(SidewalkStyle), SidewalkStyle.CountrySide), Range(0.0f, 100.0f)] private float CountrySideDrop { get; set { field = value; IsDirty = true; } } = 8.0f;
+	[Property(Title = "Verge Width"), Feature("Sidewalk"), ShowIf(nameof(SidewalkStyle), SidewalkStyle.CountrySide), Range(10.0f, 1000.0f)] private float CountrySideVergeWidth { get; set { field = value; IsDirty = true; } } = 200.0f;
+	[Property(Title = "Verge Depth"), Feature("Sidewalk"), ShowIf(nameof(SidewalkStyle), SidewalkStyle.CountrySide), Range(0.0f, 500.0f)] private float CountrySideVergeDepth { get; set { field = value; IsDirty = true; } } = 60.0f;
+	[Property(Title = "Slope Segments"), Feature("Sidewalk"), ShowIf(nameof(SidewalkStyle), SidewalkStyle.CountrySide), Range(1, 12)] private int VergeSlopeSegments { get; set { field = value; IsDirty = true; } } = 3;
+	[Property(Title = "Chaos"), Feature("Sidewalk"), ShowIf(nameof(SidewalkStyle), SidewalkStyle.CountrySide), Range(0.0f, 200.0f)] private float VergeChaosAmount { get; set { field = value; IsDirty = true; } } = 30.0f;
+	[Property(Title = "Chaos Scale"), Feature("Sidewalk"), ShowIf(nameof(SidewalkStyle), SidewalkStyle.CountrySide), Range(0.001f, 0.2f)] private float VergeChaosScale { get; set { field = value; IsDirty = true; } } = 0.02f;
 
 
 
@@ -65,6 +84,22 @@ public partial class RoadComponent
 		if (segmentsToKeep.Count < 2)
 			return;
 
+		switch (SidewalkStyle)
+		{
+			case SidewalkStyle.CountrySide:
+				BuildCountrySideSidewalk(frames, segmentsToKeep);
+				break;
+
+			default:
+				BuildCitySidewalk(frames, segmentsToKeep);
+				break;
+		}
+	}
+
+
+
+	private void BuildCitySidewalk(Transform[] frames, List<int> segmentsToKeep)
+	{
 		var polygonMesh = new PolygonMesh();
 		var material = SidewalkMaterial ?? Material.Load("materials/dev/reflectivity_70.vmat");
 		var frameVertices = new HalfEdgeMesh.VertexHandle[segmentsToKeep.Count][];

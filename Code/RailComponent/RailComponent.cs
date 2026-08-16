@@ -34,6 +34,7 @@ public partial class RailComponent : Component, Component.ExecuteInEditor, Compo
 	private const string RailMeshTag = "rail_mesh";
 	private const string RailSurfaceTag = "rail_surface";
 	private const string SleeperSurfaceTag = "rail_sleepers";
+	private const string FishplateSurfaceTag = "rail_fishplates";
 
 	/// <summary>
 	/// Prevents the rails from being rebuilt when a property changes or the component is re-enabled. Useful if you plan
@@ -216,6 +217,9 @@ public partial class RailComponent : Component, Component.ExecuteInEditor, Compo
 
 		if (HasSleepers)
 			BuildSleepers(frames);
+
+		if (HasFishplates)
+			BuildFishplates(frames);
 	}
 
 
