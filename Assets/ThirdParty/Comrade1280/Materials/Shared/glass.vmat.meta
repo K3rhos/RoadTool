@@ -1,0 +1,24 @@
+{
+  "guid": "ac73779f-0a1d-4c2c-9ff1-35a54e52f98c",
+  "publish": {
+    "Enabled": false,
+    "ProjectConfig": {
+      "Title": "Glass",
+      "Type": "material",
+      "Org": "local",
+      "Ident": "glass",
+      "Schema": 0,
+      "IncludeSourceFiles": false,
+      "Resources": null,
+      "PackageReferences": null,
+      "EditorReferences": [
+        "realwrldtxtures.ceiling01#113558"
+      ],
+      "Mounts": null,
+      "IsStandaloneOnly": false,
+      "Metadata": {
+        "SingleAssetSource": "thirdparty/comrade1280/materials/shared/glass.vmat"
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "guid": "70ccf0f4-fbc9-4c99-a3b3-436eefed15aa",
+  "publish": {
+    "Enabled": false,
+    "ProjectConfig": {
+      "Title": "Sidewalk",
+      "Type": "material",
+      "Org": "local",
+      "Ident": "sidewalk",
+      "Schema": 0,
+      "IncludeSourceFiles": false,
+      "Resources": null,
+      "PackageReferences": null,
+      "EditorReferences": [
+        "realwrldtxtures.ceiling01#113558"
+      ],
+      "Mounts": null,
+      "IsStandaloneOnly": false,
+      "Metadata": {
+        "SingleAssetSource": "roadtool/materials/sidewalk.vmat"
+      }
+    }
+  }
+}

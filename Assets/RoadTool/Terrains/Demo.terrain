@@ -1,11 +1,20 @@
 {
   "Maps": {
-    "$blob": "6d181067-eb8f-4f4e-8687-942202133330"
+    "$blob": "3d952a53-ec04-8ae5-8b4b-92a90a1ea2f8"
   },
-  "Resolution": 512,
+  "Resolution": 4096,
   "TerrainSize": 50000,
   "TerrainHeight": 10000,
-  "Materials": [],
+  "Materials": [
+    {
+      "Id": "07ac99b9-dc05-41ad-8536-64700d4efe53",
+      "Path": "textures/grass/grass_cut.tmat"
+    },
+    {
+      "Id": "bfc9583c-a54d-400e-b5a7-ef54cd0a41d0",
+      "Path": "textures/gravel/gravel.tmat"
+    }
+  ],
   "MaterialSettings": {
     "HeightBlendEnabled": true,
     "HeightBlendSharpness": 0.87,
@@ -16,7 +25,8 @@
       "AddressModeW": "Wrap",
       "MipLodBias": 0,
       "MaxAnisotropy": 8,
-      "BorderColor": "0,0,0,0"
+      "BorderColor": "0,0,0,0",
+      "Index": 1
     }
   },
   "ResourceVersion": 3,

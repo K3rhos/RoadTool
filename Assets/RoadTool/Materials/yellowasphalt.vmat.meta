@@ -1,0 +1,24 @@
+{
+  "guid": "a3e51e63-6bf8-4ce3-93b7-5c6b5a3848b9",
+  "publish": {
+    "Enabled": false,
+    "ProjectConfig": {
+      "Title": "Yellowasphalt",
+      "Type": "material",
+      "Org": "local",
+      "Ident": "yellowasphalt",
+      "Schema": 0,
+      "IncludeSourceFiles": false,
+      "Resources": null,
+      "PackageReferences": null,
+      "EditorReferences": [
+        "realwrldtxtures.ceiling01#113558"
+      ],
+      "Mounts": null,
+      "IsStandaloneOnly": false,
+      "Metadata": {
+        "SingleAssetSource": "roadtool/materials/yellowasphalt.vmat"
+      }
+    }
+  }
+}
